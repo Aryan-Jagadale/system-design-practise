@@ -19,7 +19,7 @@ const app = express();
 const port = 3000;
 
 app.use(cors({ origin: '*' }));
-app.use(express.static(path.join(__dirname, '.'))); // Serve dashboard.html
+app.use(express.static(path.join(__dirname, '.')));
 
 // Custom Memory Exporter for traces
 class MemorySpanExporter {
@@ -75,8 +75,8 @@ const MAX_FAILURES = 3;
 const CHECK_INTERVAL = 10000;
 
 // Circuit Breaker: Per-backend state
-const CIRCUIT_THRESHOLD = 5; // Consecutive errors to open
-const CIRCUIT_TIMEOUT = 30000; // 30s open before half-open
+const CIRCUIT_THRESHOLD = 5; 
+const CIRCUIT_TIMEOUT = 30000; 
 const circuitStates = new Map(allBackends.map(url => [url, {
   state: 'CLOSED', // CLOSED, OPEN, HALF_OPEN
   consecutiveFailures: 0,
@@ -123,7 +123,7 @@ function shouldRouteToBackend(backendUrl) {
       state.state = 'HALF_OPEN';
       state.halfOpenSuccess = false;
       console.log(`[CIRCUIT] Half-open for ${backendUrl} after timeout`);
-      return true; // Allow one test
+      return true;
     }
     return false; // Block
   }
@@ -136,13 +136,13 @@ function shouldRouteToBackend(backendUrl) {
   return true; // Fallback
 }
 
-// Update healthyBackends to respect circuit (not just health)
+
 function updateHealthyBackends() {
   healthyBackends = allBackends.filter(url => healthyBackends.includes(url) && shouldRouteToBackend(url)); // Health + circuit
   stats.healthy_backends = healthyBackends.length;
 }
 
-// Stats with global
+
 const stats = {
   requests_total: new Map(allBackends.map(url => [url, 0])),
   latency_ms: new Map(allBackends.map(url => [url, { total: 0, count: 0 }])),
@@ -151,7 +151,6 @@ const stats = {
   pool_active_sockets: new Map(allBackends.map(url => [url, 0])),
 };
 
-// Pool Logs: In-memory for dashboard
 const poolLogs = [];
 function logPoolEvent(type, backendUrl, details = '') {
   const event = { type, backendUrl, details, timestamp: new Date().toISOString() };
@@ -161,13 +160,12 @@ function logPoolEvent(type, backendUrl, details = '') {
 }
 
 function updateHealthyCount() {
-  updateHealthyBackends(); // Now includes circuit
+  updateHealthyBackends();
 }
 
 // Service PIDs
 const servicePids = new Map();
 
-// Start/Stop endpoints
 app.post('/start-service/:id', (req, res) => {
   const id = req.params.id;
   if (servicePids.has(id)) return res.status(400).json({ error: 'Already running' });
@@ -187,8 +185,7 @@ app.post('/stop-service/:id', (req, res) => {
   process.kill(pid, 'SIGTERM');
   servicePids.delete(id);
   const backendUrl = allBackends[parseInt(id) - 1];
-  failureCounts.set(backendUrl, MAX_FAILURES); // Force failures high
-  // Force circuit OPEN immediately for demo
+  failureCounts.set(backendUrl, MAX_FAILURES);
   const circuit = getCircuitState(backendUrl);
   circuit.state = 'OPEN';
   circuit.consecutiveFailures = CIRCUIT_THRESHOLD;
@@ -200,7 +197,7 @@ app.post('/stop-service/:id', (req, res) => {
     healthyBackends = healthyBackends.filter(url => url !== backendUrl);
     updateHealthyCount();
   }
-  checkHealth(backendUrl); // Ongoing monitoring (skipped if open)
+  checkHealth(backendUrl); 
   res.json({ status: 'stopped' });
 });
 
@@ -417,7 +414,7 @@ app.use('/', async (req, res, next) => {
       stats.latency_ms.get(selectedBackend).count += 1;
       stats.errors_total.set(selectedBackend, (stats.errors_total.get(selectedBackend) || 0) + 1);
       recordBackendError(selectedBackend); // Circuit error
-      updateHealthyBackends(); // Re-eval pool
+      updateHealthyBackends();
       console.error(`Proxy error for ${selectedBackend}: ${err.message}`);
       checkHealth(selectedBackend);
       res_.status(502).json({ error: 'Backend error' });
