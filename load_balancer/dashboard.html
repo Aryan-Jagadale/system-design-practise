@@ -40,7 +40,7 @@
 
     function appendLine(text, className = '') {
       const line = document.createElement('div');
-      line.textContent = `${new Date().toISOString().slice(11, 19)} | ${text}`;
+      line.textContent = `${new Date().toISOString()} | ${text}`;
       if (className) line.className = className;
       terminal.appendChild(line);
       terminal.scrollTop = terminal.scrollHeight;
