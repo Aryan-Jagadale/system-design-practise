@@ -17,13 +17,15 @@
     .service { color: magenta; }
     .pool-reuse { color: green; }
     .pool-new { color: red; }
+    #status { padding: 10px; text-align: center; color: gray; }
   </style>
 </head>
 <body>
   <div id="header">
     <h1>Load Balancer Dashboard</h1>
-    <p>Terminal Simulation - Watch requests, traces, and stats in real-time</p>
+    <p>Terminal Simulation - Watch requests, traces, and stats in real-time via SSE</p>
   </div>
+  <div id="status">Connecting to SSE...</div>
   <div id="controls">
     <button onclick="hitLoadBalancer()">Run Request →</button>
     <br>
@@ -35,8 +37,10 @@
   <script>
     const API_BASE = 'https://system-design-practise.onrender.com'; 
     const terminal = document.getElementById('terminal');
+    const status = document.getElementById('status');
     let serviceStates = {1: 'unknown', 2: 'unknown'};
-    let lastPoolLogId = 0; // Track new logs
+    let traceGroups = {};
+    let lastStats = null;
 
     function appendLine(text, className = '') {
       const line = document.createElement('div');
@@ -51,6 +55,71 @@
       if (className) line.className = className;
       terminal.appendChild(line);
       terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function updateStatus(message, isError = false) {
+      status.textContent = message;
+      status.style.color = isError ? 'red' : 'gray';
+    }
+
+    function handleStats(data) {
+      const line = `STATS | Healthy: ${data.healthy_backends}/2 | Total Req: ${data.total_requests} | Errors: ${data.total_errors} | Per Backend: ${data.per_backend.map(b => `${b.backend.slice(-4)}: ${b.requests}req/${b.avg_latency_ms}ms (sockets: ${b.active_sockets}) (${b.healthy ? 'OK' : 'DOWN'} | Circuit: ${b.circuit.state})`).join(' | ')}`;
+      if (JSON.stringify(data) !== JSON.stringify(lastStats)) {
+        appendLine(line, 'stats');
+        lastStats = data;
+      }
+    }
+
+    function handleTrace(spanData) {
+      const traceId = spanData.traceId;
+      if (!traceGroups[traceId]) traceGroups[traceId] = [];
+      traceGroups[traceId].push(spanData);
+
+      const group = traceGroups[traceId];
+      const lastSpan = group[group.length - 1];
+      if (group.every(s => s.endTime)) { 
+        const tree = group.map(s => `TRACE ${traceId.slice(0,8)} | ${s.name} (${(s.endTime - s.startTime)/1000000}ms) -> Backend: ${s.attributes['backend.url'] || 'N/A'}`).join('\n');
+        appendLine(`New Trace Group (ID: ${traceId.slice(0,8)}):\n${tree}`, 'trace');
+  
+        const keys = Object.keys(traceGroups);
+        if (keys.length > 5) {
+          const oldest = keys[0];
+          delete traceGroups[oldest];
+        }
+      }
+    }
+
+    function handlePoolLog(event) {
+      let className = '';
+      switch (event.type) {
+        case 'reuse': className = 'pool-reuse'; break;
+        case 'free': className = 'pool-reuse'; break; 
+        case 'new': className = 'pool-new'; break;
+        case 'close': className = 'pool-new'; break;
+      }
+      appendLine(`[POOL ${event.type.toUpperCase()}] ${event.backendUrl.slice(-9)} ${event.details}`, className);
+    }
+
+    function handleInitial(data) {
+      // Set initial state
+      lastStats = data.stats;
+      appendLine(`INITIAL STATS: Healthy: ${data.stats.healthy_backends}/2 | Total Req: ${data.stats.total_requests} | Errors: ${data.stats.total_errors}`, 'stats');
+      
+      // Initial pool logs
+      data.poolLogs.forEach(event => handlePoolLog(event));
+      
+      // Initial traces (group them)
+      const initialGroups = {};
+      data.traces.forEach(span => {
+        const traceId = span.traceId;
+        if (!initialGroups[traceId]) initialGroups[traceId] = [];
+        initialGroups[traceId].push(span);
+      });
+      Object.entries(initialGroups).forEach(([traceId, group]) => {
+        const tree = group.map(s => `TRACE ${traceId.slice(0,8)} | ${s.name} (${(s.endTime - s.startTime)/1000000}ms) -> Backend: ${s.attributes['backend.url'] || 'N/A'}`).join('\n');
+        appendLine(`Initial Trace Group (ID: ${traceId.slice(0,8)}):\n${tree}`, 'trace');
+      });
+      traceGroups = initialGroups; // Set as current
     }
 
     async function hitLoadBalancer() {
@@ -78,71 +147,62 @@
       }
     }
 
-    async function updateStats() {
-      try {
-        const res = await fetch(`${API_BASE}/stats`);
-        const data = await res.json();
-        const line = `STATS | Healthy: ${data.healthy_backends}/2 | Total Req: ${data.total_requests} | Errors: ${data.total_errors} | Per Backend: ${data.per_backend.map(b => `${b.backend.slice(-4)}: ${b.requests}req/${b.avg_latency_ms}ms (sockets: ${b.active_sockets}) (${b.healthy ? 'OK' : 'DOWN'} | Circuit: ${b.circuit.state})`).join(' | ')}`;
-        appendLine(line, 'stats');
-      } catch (err) {
-        appendLine(`STATS ERROR: ${err.message}`, 'service');
-      }
-    }
+    // SSE Setup
+    function connectSSE() {
+      updateStatus('Connecting to SSE...');
+      const eventSource = new EventSource(`${API_BASE}/sse`);
 
-    async function updateTraces() {
-      try {
-        const res = await fetch(`${API_BASE}/traces`);
-        const { recentTraces } = await res.json();
-        if (recentTraces.length === 0) return;
-        // Group by traceId
-        const groups = {};
-        recentTraces.forEach(span => {
-          if (!groups[span.traceId]) groups[span.traceId] = [];
-          groups[span.traceId].push(span);
-        });
-        Object.entries(groups).slice(-1).forEach(([traceId, spans]) => { // Last trace
-          const tree = spans.map(s => `TRACE ${traceId.slice(0,8)} | ${s.name} (${(s.endTime - s.startTime)/1000000}ms) -> Backend: ${s.attributes['backend.url'] || 'N/A'}`).join('\n');
-          appendLine(`New Trace Group (ID: ${traceId.slice(0,8)}):\n${tree}`, 'trace');
-        });
-      } catch (err) {
-        appendLine(`TRACE ERROR: ${err.message}`, 'service');
-      }
-    }
+      eventSource.onopen = () => {
+        updateStatus('SSE Connected');
+        appendLine('=== SSE Stream Connected - Real-time updates enabled ===');
+      };
 
-    async function updatePoolLogs() {
-      try {
-        const res = await fetch(`${API_BASE}/pool-logs`);
-        const { recentPoolEvents } = await res.json();
-        recentPoolEvents.slice(lastPoolLogId).forEach(event => {
-          let className = '';
-          switch (event.type) {
-            case 'reuse': className = 'pool-reuse'; break;
-            case 'free': className = 'pool-reuse'; break; // Green for efficiency
-            case 'new': className = 'pool-new'; break; // Red for new
-            case 'close': className = 'pool-new'; break; // Red/orange
-          }
-          appendLine(`[POOL ${event.type.toUpperCase()}] ${event.backendUrl.slice(-9)} ${event.details}`, className);
-        });
-        lastPoolLogId = recentPoolEvents.length;
-      } catch (err) {
-        appendLine(`POOL LOG ERROR: ${err.message}`, 'service');
-      }
-    }
+      eventSource.addEventListener('initial', (e) => {
+        const data = JSON.parse(e.data);
+        handleInitial(data);
+      });
 
-    // Poll every 2s
-    setInterval(() => {
-      updateStats();
-      updateTraces();
-      updatePoolLogs();
-    }, 2000);
+      eventSource.addEventListener('stats', (e) => {
+        const data = JSON.parse(e.data);
+        handleStats(data);
+      });
+
+      eventSource.addEventListener('trace', (e) => {
+        const spanData = JSON.parse(e.data);
+        handleTrace(spanData);
+      });
+
+      eventSource.addEventListener('pool-log', (e) => {
+        const event = JSON.parse(e.data);
+        handlePoolLog(event);
+      });
+
+      eventSource.onerror = (err) => {
+        updateStatus('SSE Error - Reconnecting...', true);
+        appendLine('SSE Error: Reconnecting...', 'service');
+      };
+
+      eventSource.onmessage = (e) => {
+        if (e.data.startsWith(':')) {
+          // Heartbeat
+          updateStatus('SSE Alive');
+          return;
+        }
+      };
+
+      return eventSource;
+    }
 
     // Initial load
-    appendLine('=== Load Balancer Dashboard Started ===');
+    appendLine('=== Load Balancer Dashboard Started (SSE Mode) ===');
     appendLine('Services status: unknown | Hit buttons to interact!');
     appendLine('Pooling Demo: Watch [POOL] lines—reuses (green) should dominate after first request!');
-    updateStats();
-    updateTraces();
-    updatePoolLogs();
+    const es = connectSSE();
+
+    // Cleanup on unload
+    window.addEventListener('beforeunload', () => {
+      es.close();
+    });
   </script>
 </body>
 </html>

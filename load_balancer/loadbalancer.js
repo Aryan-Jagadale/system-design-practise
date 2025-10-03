@@ -21,6 +21,18 @@ const port = 3000;
 app.use(cors({ origin: '*' }));
 app.use(express.static(path.join(__dirname, '.')));
 
+// SSE Clients management
+let sseClients = [];
+
+function broadcast(eventType, data) {
+  sseClients.forEach((client) => {
+    if (!client.res.writableEnded) {
+      client.res.write(`event: ${eventType}\n`);
+      client.res.write(`data: ${JSON.stringify(data)}\n\n`);
+    }
+  });
+}
+
 // Custom Memory Exporter for traces
 class MemorySpanExporter {
   constructor() {
@@ -28,7 +40,7 @@ class MemorySpanExporter {
   }
   export(spans, resultCallback) {
     spans.forEach(span => {
-      this.recentSpans.push({
+      const spanData = {
         traceId: span.spanContext.traceId,
         spanId: span.spanContext.spanId,
         parentSpanId: span.parentSpanId,
@@ -39,7 +51,11 @@ class MemorySpanExporter {
         attributes: Object.fromEntries(span.attributes),
         status: span.status,
         events: span.events.map(e => ({ name: e.name, attributes: Object.fromEntries(e.attributes) })),
-      });
+      };
+      this.recentSpans.push(spanData);
+      if (sseClients.length > 0) {
+        broadcast('trace', spanData);
+      }
     });
     this.recentSpans = this.recentSpans.slice(-50); // Keep last 50
     resultCallback({ code: ExportResultCode.SUCCESS });
@@ -151,11 +167,42 @@ const stats = {
   pool_active_sockets: new Map(allBackends.map(url => [url, 0])),
 };
 
+function getStatsResponse() {
+  const avgLatency = (backend) => {
+    const data = stats.latency_ms.get(backend);
+    return data.count > 0 ? Math.round(data.total / data.count) : 0;
+  };
+
+  return {
+    healthy_backends: stats.healthy_backends,
+    total_requests: Array.from(stats.requests_total.values()).reduce((a, b) => a + b, 0),
+    total_errors: Array.from(stats.errors_total.values()).reduce((a, b) => a + b, 0),
+    per_backend: allBackends.map(backend => {
+      const circuit = getCircuitState(backend);
+      return {
+        backend,
+        requests: stats.requests_total.get(backend),
+        avg_latency_ms: avgLatency(backend),
+        errors: stats.errors_total.get(backend),
+        active_sockets: stats.pool_active_sockets.get(backend),
+        healthy: healthyBackends.includes(backend),
+        circuit: {
+          state: circuit.state,
+          consecutiveFailures: circuit.consecutiveFailures
+        }
+      };
+    })
+  };
+}
+
 const poolLogs = [];
 function logPoolEvent(type, backendUrl, details = '') {
   const event = { type, backendUrl, details, timestamp: new Date().toISOString() };
   poolLogs.push(event);
   poolLogs.splice(0, poolLogs.length - 20); // Keep last 20
+  if (sseClients.length > 0) {
+    broadcast('pool-log', event);
+  }
   console.log(`[POOL ${type.toUpperCase()}] ${backendUrl} ${details}`);
 }
 
@@ -318,6 +365,42 @@ tracer.startActiveSpan('initial-health-checks', async (span) => {
   span.end();
 });
 
+// SSE Endpoint
+app.get('/sse', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*'
+  });
+
+  const client = { req, res };
+  sseClients.push(client);
+
+  // Send initial data
+  const initial = {
+    stats: getStatsResponse(),
+    poolLogs: [...poolLogs],
+    traces: [...memoryExporter.recentSpans]
+  };
+  res.write(`event: initial\n`);
+  res.write(`data: ${JSON.stringify(initial)}\n\n`);
+
+  // Per-client heartbeat
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) {
+      res.write(': heartbeat\n\n');
+    } else {
+      clearInterval(heartbeat);
+    }
+  }, 30000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients = sseClients.filter(c => c.req !== req);
+  });
+});
+
 // Traces endpoint
 app.get('/traces', (req, res) => {
   res.json({ recentTraces: memoryExporter.recentSpans });
@@ -330,31 +413,7 @@ app.get('/pool-logs', (req, res) => {
 
 // Stats endpoint: Include circuit state
 app.get('/stats', (req, res) => {
-  const avgLatency = (backend) => {
-    const data = stats.latency_ms.get(backend);
-    return data.count > 0 ? Math.round(data.total / data.count) : 0;
-  };
-
-  const response = {
-    healthy_backends: stats.healthy_backends,
-    total_requests: Array.from(stats.requests_total.values()).reduce((a, b) => a + b, 0),
-    total_errors: Array.from(stats.errors_total.values()).reduce((a, b) => a + b, 0),
-    per_backend: allBackends.map(backend => {
-      const circuit = getCircuitState(backend);
-      return {
-        backend,
-        requests: stats.requests_total.get(backend),
-        avg_latency_ms: avgLatency(backend),
-        errors: stats.errors_total.get(backend),
-        active_sockets: stats.pool_active_sockets.get(backend),
-        healthy: healthyBackends.includes(backend),
-        circuit: {
-          state: circuit.state,
-          consecutiveFailures: circuit.consecutiveFailures
-        }
-      };
-    })
-  };
+  const response = getStatsResponse();
   console.log("Load Balancer Stats:", JSON.stringify(response, null, 2));
   res.json(response);
 });
@@ -491,8 +550,17 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Periodic stats broadcast for SSE clients
+setInterval(() => {
+  if (sseClients.length > 0) {
+    const statsData = getStatsResponse();
+    broadcast('stats', statsData);
+  }
+}, 5000);
+
 app.listen(port, () => {
   console.log(`Load Balancer listening on port ${port}`);
   console.log(`Dashboard at http://localhost:${port}/dashboard`);
+  console.log(`SSE at http://localhost:${port}/sse`);
   console.log(`Monitoring ${allBackends.length} backends with Circuit Breaker. Initial checks starting...`);
 });
