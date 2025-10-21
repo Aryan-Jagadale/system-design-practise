@@ -2,14 +2,20 @@ class SimpleSQS {
     constructor() {
         this.queue = []; // Array of { id, body, sentAt, expiresAt, visibleUntil }
         this.nextId = 0;
+        this.dlq = [];
+        this.maxRetries = 0;
         this.startCleanup();
+    }
+    createDLQ(maxRetries = 3) {
+        this.maxRetries = maxRetries;
+        console.log(`DLQ enabled with ${maxRetries} max retries`);
     }
     generateId() {
         return `msg-${++this.nextId}-${Date.now()}`;
     }
 
     isExpired(message) {
-        return Date.now() > message.expiresAt.getTime();
+        return Date.now() > message.expiresAt?.getTime();
     }
 
     isVisible(message) {
@@ -22,19 +28,26 @@ class SimpleSQS {
             // Reset visibility timeouts (requeue invisible ones)
             this.queue.forEach(msg => {
                 if (msg.visibleUntil && Date.now() >= msg.visibleUntil.getTime()) {
-                    msg.visibleUntil = null;
+                    if (this.maxRetries > 0 && msg.receiveCount > this.maxRetries) {
+                        this.dlq.push({ ...msg, movedToDLQAt: new Date() });
+                        console.log(`Moved msg ${msg.id} to DLQ after ${msg.receiveCount} retries`);
+                        this.queue = this.queue.filter(m => m.id !== msg.id);
+                    } else {
+                        msg.visibleUntil = null;
+                    }
                 }
             });
+
+            this.dlq = this.dlq.filter(msg => !this.isExpired(msg));
         }, 5000);
     }
-
 
     sendMessage(body, delaySeconds = 0) {
         const now = new Date();
         const expiresAt = delaySeconds > 0
             ? new Date(now.getTime() + delaySeconds * 1000)
             : null;
-        
+
 
         if (expiresAt && expiresAt > new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)) {
             throw new Error('Delay too long; max 14 days like SQS');
@@ -45,7 +58,8 @@ class SimpleSQS {
             body,
             sentAt: now,
             expiresAt: expiresAt || null,
-            visibleUntil: null
+            visibleUntil: null,
+            receiveCount: 0
         };
 
         this.queue.push(message);
@@ -58,12 +72,13 @@ class SimpleSQS {
             await new Promise(resolve => setTimeout(resolve, waitTimeSeconds * 1000));
         }
 
-        
+
         const visibleMessages = this.queue
             .filter(msg => !this.isExpired(msg) && this.isVisible(msg))
             .slice(0, maxMessages);
 
         visibleMessages.forEach(msg => {
+            msg.receiveCount = (msg.receiveCount || 0) + 1;
             msg.visibleUntil = new Date(Date.now() + visibilityTimeoutSeconds * 1000);
         });
 
@@ -73,7 +88,7 @@ class SimpleSQS {
                 receiptHandle: msg.id,
                 body: msg.body,
                 attributes: {
-                    ApproximateReceiveCount: 1,
+                    ApproximateReceiveCount: msg.receiveCount,
                     SentTimestamp: msg.sentAt.getTime(),
                     ApproximateFirstReceiveTimestamp: Date.now()
                 }
@@ -88,6 +103,41 @@ class SimpleSQS {
         }
         this.queue.splice(index, 1);
         return { success: true };
+    }
+
+    async receiveFromDLQ(maxMessages = 1) {
+        const dlqMessages = this.dlq.slice(0, maxMessages); // Simple poll, no timeout
+        return {
+            messages: dlqMessages.map(msg => ({
+                messageId: msg.id,
+                body: msg.body,
+                attributes: {
+                    ApproximateReceiveCount: msg.receiveCount,
+                    MovedToDLQAt: msg.movedToDLQAt.getTime()
+                }
+            }))
+        };
+    }
+
+    deleteFromDLQ(receiptHandle) {
+        const index = this.dlq.findIndex(msg => msg.id === receiptHandle);
+        if (index === -1) return { success: false };
+        this.dlq.splice(index, 1);
+        return { success: true };
+    }
+
+    purgeDLQ() {
+        const count = this.dlq.length;
+        this.dlq = [];
+        return { purged: count };
+    }
+
+    getMetrics() {
+        return {
+            mainQueueSize: this.queue.length,
+            dlqSize: this.dlq.length,
+            maxRetries: this.maxRetries
+        };
     }
 }
 
@@ -117,5 +167,35 @@ async function demo() {
     await new Promise(resolve => setTimeout(resolve, 6000));
     console.log('Queue after expiration:', sqs.queue.map(m => ({ id: m.id, body: m.body, expired: sqs.isExpired(m) })));
 }
-
 demo().catch(console.error);
+
+// async function demoWithDLQ() {
+//   const sqs = new SimpleSQS();
+//   sqs.createDLQ(2); 
+
+//   // Send a message
+//   sqs.sendMessage('Failing Message');
+
+//   // Receive 1st time
+//   let result = await sqs.receiveMessage(1, 0, 3);
+//   console.log('1st Receive Count:', result.messages[0]?.attributes.ApproximateReceiveCount); // 1
+
+//   await new Promise(resolve => setTimeout(resolve, 6000));
+
+
+//   result = await sqs.receiveMessage(1);
+//   console.log('2nd Receive Count:', result.messages[0]?.attributes.ApproximateReceiveCount); // 2
+
+//   await new Promise(resolve => setTimeout(resolve, 6000));
+
+
+//   const dlqResult = await sqs.receiveFromDLQ(1);
+//   console.log('DLQ Message Count:', dlqResult.messages[0]?.attributes.ApproximateReceiveCount); // 3? Wait, no—moved after 2nd expiry
+
+//   console.log('Metrics:', sqs.getMetrics()); // { mainQueueSize: 0, dlqSize: 1, ... }
+
+//   // Clean up
+//   sqs.deleteFromDLQ(dlqResult.messages[0].messageId);
+// }
+
+// demoWithDLQ().catch(console.error);
