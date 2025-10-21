@@ -1,0 +1,9 @@
+* CAS is used to achieve atomic operations without the need for locks. 
+* CAS is a powerful technique that safely updates a shared resource by comparing its current value to a specified value 
+and swapping it with a new value if they match.
+
+* Let us implement the real-life scenario in banks transaction
+
+
+
+

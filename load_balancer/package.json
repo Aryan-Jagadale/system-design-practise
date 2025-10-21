@@ -1,0 +1,20 @@
+{
+  "scripts": {
+    "start": "concurrently \"node service1.js\" \"node service2.js\" \"node loadbalancer.js\"",
+    "dev": "npm run start"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.205.0",
+    "@opentelemetry/instrumentation-express": "^0.54.3",
+    "@opentelemetry/instrumentation-http": "^0.205.0",
+    "@opentelemetry/sdk-trace-node": "^2.1.0",
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
