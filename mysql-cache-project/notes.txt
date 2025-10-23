@@ -1,0 +1,36 @@
+Key Learning Areas
+1. Caching Strategies
+Implementation of caching layer between application and MySQL database
+Understanding when and how to cache data effectively
+Cache invalidation patterns and strategies
+2. Performance Optimization
+Load Testing (load-test.js) - Measuring system performance under load
+Comparing performance with and without caching
+Understanding bottlenecks in database operations
+3. Database Integration
+MySQL database connectivity and operations
+Handling database queries efficiently
+Understanding the cost of database round trips
+4. Containerization with Docker
+Docker Compose setup for multi-service architecture
+Running MySQL and application in containers
+Service orchestration and networking
+5. System Design Concepts
+Cache-aside pattern (likely implemented in cache.js)
+Read-through/Write-through caching
+Understanding trade-offs between consistency and performance
+6. Testing and Benchmarking
+Load testing implementation
+Performance metrics collection
+Comparing cached vs non-cached performance
+7. Real-world Architecture Patterns
+Typical web application stack (App → Cache → Database)
+Scalability considerations
+Memory management for caching
+Expected Performance Improvements
+Reduced database load
+Faster response times for frequently accessed data
+Better system scalability under high load
+
+
+Info ::> https://medium.com/globant/load-testing-nodejs-apis-with-autocannon-c3770478cb36
