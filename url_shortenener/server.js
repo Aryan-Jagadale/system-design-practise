@@ -43,14 +43,25 @@ app.get('/', async (_, res) => {
 
 app.post('/shorten', async (req, res) => {
     console.log("req", req);
-    const { long_url } = req?.body;
+    const { long_url,custom_alias } = req?.body;
     if (!long_url) return res.status(400).json({ error: 'long_url required' });
+
+    if (custom_alias) {
+        if (!/^[a-zA-Z0-9_-]{3,20}$/.test(custom_alias)) {
+            return res.status(400).json({
+                error: 'custom_alias must be 3–20 chars, alphanumeric + _ -'
+            });
+        }
+    }
 
     try {
         const pool = new Pool({
             connectionString: process.env.DATABASE_URL,
         });
         const client = await pool.connect();
+
+        await client.query('BEGIN');
+
         const insertRes = await client.query(
             'INSERT INTO urls(long_url) VALUES($1) RETURNING id',
             [long_url]
@@ -58,13 +69,35 @@ app.post('/shorten', async (req, res) => {
 
         console.log("insertRes", insertRes);
         const id = insertRes.rows[0].id;
-        const short_code = toBase62(id);
+
+        let short_code;
+        if (custom_alias) {
+            const conflict = await client.query(
+                'SELECT 1 FROM urls WHERE short_code = $1',
+                [custom_alias]
+            );
+            if (conflict.rowCount > 0) {
+                await client.query('ROLLBACK');
+                return res.status(409).json({
+                    error: 'Custom alias already taken'
+                });
+            }
+            short_code = custom_alias;
+
+        } else {
+            short_code = toBase62(id);
+        }
 
         await client.query(
-            `UPDATE urls SET short_code=$1, expires_at = created_at + INTERVAL '7 days' WHERE id=$2`,
-            [short_code, id]
+            `UPDATE urls 
+       SET short_code = $1, 
+           expires_at = created_at + INTERVAL '7 days',
+           is_custom = $2
+       WHERE id = $3`,
+            [short_code, !!custom_alias, id]
         );
-
+        await client.query('COMMIT');
+        await client.release();
         res.json({ message: 'URL shortened successfully', short_url: `https://short.en/${short_code}` });
 
     } catch (error) {

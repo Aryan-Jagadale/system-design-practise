@@ -4,3 +4,4 @@
 - Redis caching for <50ms redirects
 - Rate limiting (10/min)
 - Auto-expiry
+- Custom Alias
