@@ -1,0 +1,6 @@
+# URL Shortener (Node.js + PostgreSQL + Redis)
+
+- Base62 encoding from auto-increment ID
+- Redis caching for <50ms redirects
+- Rate limiting (10/min)
+- Auto-expiry
