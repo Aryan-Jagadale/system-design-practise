@@ -1,158 +1,143 @@
 require('dotenv').config();
-
-const { Pool } = require('pg');
 const express = require('express');
-const { toBase62 } = require('./utils');
-const redis = require('./cache/redis.js');
 const rateLimit = require('express-rate-limit');
+const {
+  docClient,
+  TableName
+} = require('./db/dynamodb');
+const {
+  GetCommand,
+  PutCommand,
+  UpdateCommand,
+  QueryCommand
+} = require("@aws-sdk/lib-dynamodb");
+const { generateSnowflake } = require('./utils');
+const { toBase62 } = require('./utils');
+const redis = require('./cache/redis');
 
 const app = express();
-const PORT = 4242;
-
-const limiter = rateLimit({
-    windowMs: 60 * 1000,
-    max: 10,
-    message: { error: 'Too many requests, try again later.' },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-app.use('/shorten', limiter);
 app.use(express.json());
 
-app.get('/', async (_, res) => {
-    const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-    });
-    const client = await pool.connect();
-    const result = await client.query('SELECT version()');
-    client.release();
-    const { version } = result.rows[0];
-    res.json({ version });
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many requests, try again later.' },
 });
+app.use('/shorten', limiter);
 
-// CREATE TABLE urls (
-//   id SERIAL PRIMARY KEY,
-//   long_url TEXT NOT NULL,
-//   short_code VARCHAR(10) UNIQUE NOT NULL,
-//   created_at TIMESTAMP DEFAULT NOW(),
-//   clicks INT DEFAULT 0
-// );
-
-// CREATE INDEX idx_short_code ON urls(short_code);
 
 app.post('/shorten', async (req, res) => {
-    console.log("req", req);
-    const { long_url,custom_alias } = req?.body;
-    if (!long_url) return res.status(400).json({ error: 'long_url required' });
+  const { long_url, custom_alias } = req.body;
 
-    if (custom_alias) {
-        if (!/^[a-zA-Z0-9_-]{3,20}$/.test(custom_alias)) {
-            return res.status(400).json({
-                error: 'custom_alias must be 3–20 chars, alphanumeric + _ -'
-            });
-        }
+  if (!long_url || typeof long_url !== 'string') {
+    return res.status(400).json({ error: 'long_url is required' });
+  }
+
+  let short_code = custom_alias?.trim();
+
+  if (short_code) {
+    if (!/^[a-zA-Z0-9_-]{3,20}$/.test(short_code)) {
+      return res.status(400).json({
+        error: 'custom_alias must be 3–20 chars, only letters, numbers, _, -'
+      });
     }
+  } else {
+    const snowflakeId = generateSnowflake();
+    const timestampPart = BigInt(snowflakeId) >> 22n;
+    short_code = toBase62(Number(timestampPart & 0xFFFFFFFFFn));
+  }
 
-    try {
-        const pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-        });
-        const client = await pool.connect();
+  const now = new Date().toISOString();
+  const expires_at = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-        await client.query('BEGIN');
+  try {
+    await docClient.send(new PutCommand({
+      TableName,
+      Item: {
+        short_code: short_code,
+        long_url: long_url,
+        snowflake_id: generateSnowflake(),
+        created_at: now,
+        expires_at: expires_at,
+        clicks: 0,
+        is_custom: !!custom_alias
+      },
+      ConditionExpression: 'attribute_not_exists(short_code)' // ← This prevents duplicates!
+    }));
 
-        const insertRes = await client.query(
-            'INSERT INTO urls(long_url) VALUES($1) RETURNING id',
-            [long_url]
-        );
+    return res.json({
+      message: 'URL shortened successfully',
+      short_url: `https://short.en/${short_code}`
+    });
 
-        console.log("insertRes", insertRes);
-        const id = insertRes.rows[0].id;
-
-        let short_code;
-        if (custom_alias) {
-            const conflict = await client.query(
-                'SELECT 1 FROM urls WHERE short_code = $1',
-                [custom_alias]
-            );
-            if (conflict.rowCount > 0) {
-                await client.query('ROLLBACK');
-                return res.status(409).json({
-                    error: 'Custom alias already taken'
-                });
-            }
-            short_code = custom_alias;
-
-        } else {
-            short_code = toBase62(id);
-        }
-
-        await client.query(
-            `UPDATE urls 
-       SET short_code = $1, 
-           expires_at = created_at + INTERVAL '7 days',
-           is_custom = $2
-       WHERE id = $3`,
-            [short_code, !!custom_alias, id]
-        );
-        await client.query('COMMIT');
-        await client.release();
-        res.json({ message: 'URL shortened successfully', short_url: `https://short.en/${short_code}` });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    if (err.name === 'ConditionalCheckFailedException') {
+      return res.status(409).json({
+        error: custom_alias ? 'Custom alias already taken' : 'Short code collision (retry)'
+      });
     }
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
 });
 
+// GET /{shortCode} → redirect
 app.get('/:shortCode', async (req, res) => {
-    const { shortCode } = req.params;
-    const cacheKey = `url:${shortCode}`;
+  const { shortCode } = req.params;
 
-    try {
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-            await redis.incr(`clicks:${shortCode}`);
-            console.log("From here redis");
+  if (!shortCode || shortCode.length < 3) {
+    return res.status(400).json({ error: 'Invalid short code' });
+  }
 
-            return res.redirect(302, cached);
-        }
-
-        const pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-        });
-        const client = await pool.connect();
-        const result = await client.query(
-            `UPDATE urls 
-            SET clicks = clicks + 1 
-            WHERE short_code = $1 AND (expires_at IS NULL OR expires_at > NOW())
-            RETURNING long_url`,
-            [shortCode]
-        );
-
-        if (result.rowCount === 0) {
-            const check = await pool.query(
-                'SELECT 1 FROM urls WHERE short_code = $1 AND expires_at <= NOW()',
-                [shortCode]
-            );
-            if (check.rowCount > 0) {
-                return res.status(410).json({ error: 'URL expired' });
-            }
-            return res.status(404).json({ error: 'Not found' });
-        }
-
-        const { long_url } = result.rows[0];
-        await redis.setEx(cacheKey, 3600, long_url);
-        console.log("From db");
-
-        res.redirect(302, long_url);
-    } catch (err) {
-        console.error('Redirect error:', err);
-        res.status(500).json({ error: 'Server error' });
+  try {
+    const cachedUrl = await redis.get(shortCode);
+    if (cachedUrl) {
+      redis.incr(`clicks:${shortCode}`).catch(() => {});
+      return res.redirect(302, cachedUrl);
     }
+
+    const result = await docClient.send(new GetCommand({
+      TableName,
+      Key: { short_code: shortCode }
+    }));
+
+    if (!result.Item) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const { long_url, expires_at } = result.Item;
+
+    if (expires_at && new Date(expires_at) < new Date()) {
+      return res.status(410).json({ error: 'URL expired' });
+    }
+
+
+    await docClient.send(new UpdateCommand({
+      TableName,
+      Key: { short_code: shortCode },
+      UpdateExpression: 'SET clicks = clicks + :one',
+      ExpressionAttributeValues: { ':one': 1 }
+    }));
+
+    await redis.set(shortCode, long_url, 'EX', 3600);
+
+    return res.redirect(302, long_url);
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.listen(PORT, () => {
-    console.log(`Listening to http://localhost:${PORT}`);
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'URL Shortener is running!', time: new Date().toISOString() });
 });
+
+// app.listen(process.env.PORT || 4242, () => {
+//   console.log(`Server running on port ${process.env.PORT || 4242}`);
+// });
+
+
+module.exports = app;

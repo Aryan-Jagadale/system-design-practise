@@ -14,4 +14,31 @@ function padToLength(str, len = 7) {
   return str.padStart(len, '0');
 }
 
-module.exports = { toBase62, padToLength };
+
+const EPOCH = 1731849600000;
+let sequence = 0;
+let lastTimestamp = 0;
+
+function generateSnowflake() {
+  let now = Date.now();
+
+  if (now === lastTimestamp) {
+    sequence++;
+    if (sequence > 4095) {
+      while (Date.now() <= lastTimestamp) {}
+      sequence = 0;
+    }
+  } else {
+    sequence = 0;
+  }
+
+  lastTimestamp = now;
+
+  const timestamp = BigInt(now - EPOCH);
+  const id = (timestamp << 22n) + (0n << 12n) + BigInt(sequence);
+
+  return id.toString(); 
+}
+
+
+module.exports = { toBase62, padToLength, generateSnowflake };

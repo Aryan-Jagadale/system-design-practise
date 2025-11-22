@@ -1,10 +1,31 @@
-const { createClient } = require('redis');
 
-const client = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379'
-});
+const Redis = require('ioredis');
 
-client.on('error', (err) => console.log('Redis Error', err));
-client.connect();
+let redis;
 
-module.exports = client;
+const getRedisClient = () => {
+  if (redis) return redis;
+
+  redis = new Redis({
+    host: process.env.REDIS_ENDPOINT,
+    port: Number(process.env.REDIS_PORT) || 6379,
+
+    retryStrategy: times => Math.min(times * 50, 2000),
+    maxRetriesPerRequest: 3,
+    reconnectOnError: err => {
+      const targetError = 'READONLY';
+      if (err.message.includes(targetError)) return true;
+      return false;
+    },
+    lazyConnect: true,
+    tls: {} 
+  });
+
+  redis.on('error', (err) => {
+    console.log('Redis connection error (fallback to DB):', err.message);
+  });
+
+  return redis;
+};
+
+module.exports = getRedisClient();

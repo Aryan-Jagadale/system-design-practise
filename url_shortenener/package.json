@@ -1,7 +1,7 @@
 {
   "name": "url_shortenener",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "lambda.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
@@ -12,10 +12,15 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.932.0",
+    "@aws-sdk/lib-dynamodb": "^3.932.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "ioredis": "^5.8.2",
     "pg": "^8.16.3",
-    "redis": "^5.9.0"
+    "redis": "^5.9.0",
+    "serverless-http": "^4.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
