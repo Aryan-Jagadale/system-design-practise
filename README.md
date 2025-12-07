@@ -6,6 +6,13 @@ Storage = Daily Events × Retention Years × Size Per Event
 Bandwidth = Daily Events × Avg Response Size
 
 
+Rule of thumb you must remember for every system design:
+
+- Social/sharing systems → always heavily read-heavy (10x–100x)
+- Logging/monitoring → write-heavy
+- Chat → balanced or slightly write-heavy
+
+
 
 # URL Shortener
 
