@@ -13,6 +13,15 @@ Rule of thumb you must remember for every system design:
 - Chat → balanced or slightly write-heavy
 
 
+Never use a low-cardinality or monotonically increasing value as partition key in a high-throughput table.
+Good partition keys (high cardinality + random):
+
+idempotency_key
+UUID
+SHA-256 hash of something
+KSUID / ULID
+
+
 
 # URL Shortener
 
