@@ -127,8 +127,8 @@ export default function App() {
 
       const { uploadId, key, presignedUrls } = await initRes.json();
       console.log("Presigned URLs:", presignedUrls);
-      console.log("uploadId",uploadId);
-      
+      console.log("uploadId", uploadId);
+
 
       const uploadPromises = missing.map(async ({ index }: { index: number }) => {
 
@@ -190,6 +190,9 @@ export default function App() {
           uploadId,
           key: key,
           parts: completedParts,
+          fileId,
+          fileName: selectedFile.name,
+          contentType: selectedFile.type || "application/octet-stream",
           newChunkHashes: missing.map((m: any) => m.hash),
         }),
       });
@@ -275,6 +278,49 @@ export default function App() {
               <p style={{ margin: 0, color: '#0066cc' }}>{message}</p>
             </div>
           )}
+
+          <div style={{ marginTop: '30px' }}>
+            <button
+              onClick={async () => {
+                try {
+                  setMessage("Generating secure download link...");
+                  const res = await fetch(`${URL}/generate-download-url`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ fileId }), // ← your fileId
+                  });
+
+                  if (!res.ok) throw new Error("Failed to get download URL");
+
+                  const { downloadUrl } = await res.json();
+
+                  // Start download
+                  const a = document.createElement("a");
+                  a.href = downloadUrl;
+                  a.download = selectedFile?.name || "downloaded-file";
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+
+                  setMessage("Download started! Link expires in 1 hour.");
+                } catch (err: any) {
+                  setMessage(`Download failed: ${err.message}`);
+                  console.error(err);
+                }
+              }}
+              style={{
+                padding: "14px 28px",
+                fontSize: "18px",
+                background: "#28a745",
+                color: "white",
+                border: "none",
+                borderRadius: "12px",
+                cursor: "pointer"
+              }}
+            >
+              Download Your File
+            </button>
+          </div>
         </div>
       )}
     </div>
