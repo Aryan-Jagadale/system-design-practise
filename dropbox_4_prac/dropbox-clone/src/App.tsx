@@ -218,8 +218,7 @@ export default function App() {
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '40px 20px', fontFamily: 'system-ui' }}>
-      <h1 style={{ textAlign: 'center', color: '#0066ff' }}>Mini Dropbox Clone – Step 3</h1>
-      <h2 style={{ textAlign: 'center' }}>Client-Side Chunking + SHA-256</h2>
+      <h1 style={{ textAlign: 'center', color: '#0066ff' }}>Mini Dropbox Clone</h1>
 
       <input
         type="file"
@@ -268,7 +267,7 @@ export default function App() {
                   cursor: 'pointer'
                 }}
               >
-                Next: Multipart Upload (Coming Soon)
+                Multipart Upload
               </button>
             </>
           )}
@@ -279,48 +278,52 @@ export default function App() {
             </div>
           )}
 
-          <div style={{ marginTop: '30px' }}>
-            <button
-              onClick={async () => {
-                try {
-                  setMessage("Generating secure download link...");
-                  const res = await fetch(`${URL}/generate-download-url`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ fileId }), // ← your fileId
-                  });
+          {
+            uploadProgress === 100 && (
+              <div style={{ marginTop: '30px' }}>
+                <button
+                  onClick={async () => {
+                    try {
+                      setMessage("Generating secure download link...");
+                      const res = await fetch(`${URL}/generate-download-url`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ fileId }), // ← your fileId
+                      });
 
-                  if (!res.ok) throw new Error("Failed to get download URL");
+                      if (!res.ok) throw new Error("Failed to get download URL");
 
-                  const { downloadUrl } = await res.json();
+                      const { downloadUrl } = await res.json();
 
-                  // Start download
-                  const a = document.createElement("a");
-                  a.href = downloadUrl;
-                  a.download = selectedFile?.name || "downloaded-file";
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
+                      // Start download
+                      const a = document.createElement("a");
+                      a.href = downloadUrl;
+                      a.download = selectedFile?.name || "downloaded-file";
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
 
-                  setMessage("Download started! Link expires in 1 hour.");
-                } catch (err: any) {
-                  setMessage(`Download failed: ${err.message}`);
-                  console.error(err);
-                }
-              }}
-              style={{
-                padding: "14px 28px",
-                fontSize: "18px",
-                background: "#28a745",
-                color: "white",
-                border: "none",
-                borderRadius: "12px",
-                cursor: "pointer"
-              }}
-            >
-              Download Your File
-            </button>
-          </div>
+                      setMessage("Download started! Link expires in 1 hour.");
+                    } catch (err: any) {
+                      setMessage(`Download failed: ${err.message}`);
+                      console.error(err);
+                    }
+                  }}
+                  style={{
+                    padding: "14px 28px",
+                    fontSize: "18px",
+                    background: "#28a745",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "12px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Download Your File
+                </button>
+              </div>
+            )
+          }
         </div>
       )}
     </div>
