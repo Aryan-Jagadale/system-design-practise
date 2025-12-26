@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import * as utils from '@noble/hashes/utils.js';
 const { bytesToHex } = utils;
 
-const URL = "https://k9c5t4s500.execute-api.ap-south-1.amazonaws.com/prod";
+const URL = import.meta.env.VITE_API_URL;
 const INITIATE_URL = `${URL}/initiate-multipart`;
 const COMPLETE_URL = `${URL}/complete-multipart`;
 const CHECK_CHUNKS_URL = `${URL}/check-chunks`;
