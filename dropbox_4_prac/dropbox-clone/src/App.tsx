@@ -8,6 +8,7 @@ const URL = "https://k9c5t4s500.execute-api.ap-south-1.amazonaws.com/prod"
 const API_URL = `${URL}/generate-presigned-url`;
 const INITIATE_URL = `${URL}/initiate-multipart`;
 const COMPLETE_URL = `${URL}/complete-multipart`;
+const CHECK_CHUNKS_URL = `${URL}/check-chunks`;
 
 const CHUNK_SIZE = 10 * 1024 * 1024;
 
@@ -86,42 +87,86 @@ export default function App() {
     setUploadProgress(0);
     setMessage("Initiating multipart upload...");
     try {
-      const initResponse = await fetch(INITIATE_URL, {
+      const chunkHashes = chunks.map(c => c.hash);
+      console.log("chunkHashes", chunkHashes);
+
+      const checkRes = await fetch(CHECK_CHUNKS_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chunkHashes }),
+      });
+
+      if (!checkRes.ok) throw new Error("Failed to check chunks");
+
+      const { missing, savedBandwidthMB } = await checkRes.json();
+
+      if (missing.length === 0) {
+        setMessage("🎉 Instant sync! File already exists — nothing to upload!");
+        setIsUploading(false);
+        setUploadProgress(100);
+        return;
+      }
+
+      console.log("Missing", missing);
+
+
+      setMessage(`Deduplication magic! Only uploading ${missing.length}/${chunks.length} new chunks (saved ~${savedBandwidthMB} MB)`);
+
+      const initRes = await fetch(INITIATE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileName: selectedFile.name,
           fileType: selectedFile.type || "application/octet-stream",
           partCount: chunks.length,
+          missingPartNumbers: missing.map((m: any) => m.index),
         }),
       });
 
-      const { uploadId, presignedUrls,key } = await initResponse.json();
+      if (!initRes.ok) throw new Error("Failed to initiate multipart");
 
-      const uploadPromises = chunks.map(async (chunk, index) => {
-        const { url } = presignedUrls.find((p: any) => p.partNumber === index + 1);
+      const { uploadId, key, presignedUrls } = await initRes.json();
+      console.log("Presigned URLs:", presignedUrls);
+      console.log("uploadId",uploadId);
+      
 
-        const xhr = new XMLHttpRequest();
+      const uploadPromises = missing.map(async ({ index }: { index: number }) => {
+
+        const chunk = chunks[index - 1];
+        const partInfo = presignedUrls.find((p: any) => p.partNumber === index);
+        console.log("partInfo", partInfo);
+
+        if (!partInfo || !partInfo.url) {
+          throw new Error(`Missing presigned URL for part ${index}`);
+        }
+
+        if (!partInfo?.url) throw new Error(`No presigned URL for part ${index}`);
 
         return new Promise<{ partNumber: number; eTag: string }>((resolve, reject) => {
-          xhr.open("PUT", url);
-          xhr.setRequestHeader("Content-Type", "application/octet-stream");
+          const xhr = new XMLHttpRequest();
+
+          xhr.open("PUT", partInfo.url);
+          // xhr.setRequestHeader("Content-Type", "application/octet-stream");
 
           xhr.onload = () => {
             if (xhr.status === 200) {
-              const eTag = xhr.getResponseHeader("ETag")?.replace(/"/g, "");
-              resolve({ partNumber: index + 1, eTag: eTag || "" });
+              const eTag = xhr.getResponseHeader("ETag")?.replace(/"/g, "") || "";
+              resolve({ partNumber: index, eTag: eTag || "" });
             } else {
-              reject(new Error(`Part ${index + 1} failed: ${xhr.status}`));
+              reject(new Error(`Part ${index} failed: ${xhr.status}`));
             }
           };
 
-          xhr.onerror = () => reject(new Error("Network error"));
+          xhr.onerror = () => reject(new Error(`Network error on part ${index}`));
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
-              const chunkProgress = (e.loaded / e.total) * (100 / chunks.length);
-              setUploadProgress(prev => prev + chunkProgress / chunks.length);
+              const percentPerChunk = 100 / missing.length;
+              const thisChunkProgress = (e.loaded / e.total) * percentPerChunk;
+              setUploadProgress(prev => {
+                const otherChunks = prev - (percentPerChunk * (index - 1));
+                return otherChunks + thisChunkProgress;
+              });
             }
           };
 
@@ -132,32 +177,29 @@ export default function App() {
       });
 
       console.log("uploadPromises", uploadPromises);
-
-
       const completedParts = await Promise.all(uploadPromises);
-
-      setMessage("Complete step coming next — all chunks are in S3!");
+      setMessage("All new chunks uploaded! Finalizing on server...");
 
       console.log("Completed parts:", completedParts);
       console.log("UploadId:", uploadId);
-      const completeResponse = await fetch(COMPLETE_URL, {
+
+      const completeRes = await fetch(COMPLETE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           uploadId,
           key: key,
-          parts: completedParts.map(p => ({
-            PartNumber: p.partNumber,
-            ETag: p.eTag,
-          })),
+          parts: completedParts,
+          newChunkHashes: missing.map((m: any) => m.hash),
         }),
       });
 
-      if (!completeResponse.ok) {
-        throw new Error("Failed to complete upload");
+      if (!completeRes.ok) {
+        const err = await completeRes.text();
+        throw new Error(`Complete failed: ${err}`);
       }
 
-      const completeData = await completeResponse.json();
+      const completeData = await completeRes.json();
 
       setMessage(`🎉 SUCCESS! File fully uploaded and assembled!`);
       setUploadProgress(100);
