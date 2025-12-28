@@ -1,72 +1,64 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/drive/Header";
 import Sidebar from "@/components/drive/Sidebar";
 import ContentHeader from "@/components/drive/ContentHeader";
-import QuickAccess from "@/components/drive/QuickAccess";
 import FileGrid, { FileItem } from "@/components/drive/FileGrid";
+import { toast } from "@/hooks/use-toast";
+const URL = import.meta.env.VITE_API_URL;
 
-const initialFiles: FileItem[] = [
-  // { id: "5", name: "Q4 Report.docx", type: "document", modifiedDate: "Dec 22, 2024", size: "2.4 MB", owner: "me" },
-  // { id: "6", name: "Budget 2025.xlsx", type: "spreadsheet", modifiedDate: "Dec 21, 2024", size: "1.8 MB", owner: "me" },
-  // { id: "7", name: "Presentation.pptx", type: "presentation", modifiedDate: "Dec 19, 2024", size: "5.2 MB", owner: "me" },
-  // { id: "8", name: "Screenshot.png", type: "image", modifiedDate: "Dec 17, 2024", size: "842 KB", owner: "me" },
-  // { id: "9", name: "Contract.pdf", type: "pdf", modifiedDate: "Dec 14, 2024", size: "1.1 MB", owner: "Jane Smith" },
-  // { id: "10", name: "Meeting Notes.docx", type: "document", modifiedDate: "Dec 12, 2024", size: "156 KB", owner: "me" },
-];
 
 const Index = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [files, setFiles] = useState<FileItem[]>(initialFiles);
+  const [files, setFiles] = useState<FileItem[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+
 
   const handleFileUpload = (uploadedFiles: FileList) => {
-    const newFiles: FileItem[] = Array.from(uploadedFiles).map((file, index) => ({
-      id: `uploaded-${Date.now()}-${index}`,
-      name: file.name,
-      type: getFileType(file.name),
-      modifiedDate: new Date().toLocaleDateString("en-US", { 
-        month: "short", 
-        day: "numeric", 
-        year: "numeric" 
-      }),
-      size: formatFileSize(file.size),
-      owner: "me",
-    }));
-
-    setFiles(prev => [...newFiles, ...prev]);
+    fetchFileList();
   };
 
-  const handleFolderCreate = (name: string) => {
-    const newFolder: FileItem = {
-      id: `folder-${Date.now()}`,
-      name,
-      type: "folder",
-      modifiedDate: new Date().toLocaleDateString("en-US", { 
-        month: "short", 
-        day: "numeric", 
-        year: "numeric" 
-      }),
-      owner: "me",
-    };
 
-    setFiles(prev => [newFolder, ...prev]);
+  const fetchFileList = async () => {
+    setIsLoadingFiles(true);
+    try {
+      const res = await fetch(`${URL}/list-files`);
+      if (!res.ok) throw new Error("Failed to load files");
+
+      const data = await res.json();
+      setFiles(data.files || []);
+      toast({ title: "Files loaded", description: `Loaded ${data.files.length} files.` });
+    } catch (err: any) {
+      console.error("Error fetching files:", err);
+      toast({
+        title: "Error",
+        description: err.message || "An error occurred while fetching files.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingFiles(false);
+    }
   };
+
+  useEffect(() => {
+    fetchFileList();
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Header */}
       <Header />
-      
+
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <Sidebar 
+        <Sidebar
           onFileUpload={handleFileUpload}
-          onFolderCreate={handleFolderCreate}
+          onFolderCreate={() => { }}
         />
-        
+
         {/* Content Area */}
         <main className="flex-1 flex flex-col overflow-hidden border-l border-border">
-          <ContentHeader 
+          <ContentHeader
             viewMode={viewMode}
             onViewModeChange={setViewMode}
           />
