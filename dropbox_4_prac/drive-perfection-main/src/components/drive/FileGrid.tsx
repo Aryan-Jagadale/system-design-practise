@@ -187,34 +187,47 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
                 <Loader2 className="h-6 w-6 animate-spin" />
                 <span>Loading preview...</span>
               </div>
-            ) : message ? (
-              <p className="text-destructive">{message}</p>
-            ) : previewFile?.url ? (
-              <div className="w-full h-full">
-                {previewFile.type === "image" ? (
-                  <img 
-                    src={previewFile.url} 
-                    alt={previewFile.name}
-                    className="max-w-full max-h-[70vh] object-contain mx-auto"
-                  />
-                ) : previewFile.type === "pdf" ? (
-                  <iframe
-                    src={previewFile.url}
-                    className="w-full h-[70vh] border-0"
-                    title={previewFile.name}
-                  />
-                ) : (
-                  <div className="text-center">
-                    <p className="mb-4">Preview not available for this file type.</p>
-                    <Button asChild>
-                      <a href={previewFile.url} download={previewFile.name}>
-                        Download File
-                      </a>
-                    </Button>
-                  </div>
-                )}
+            ) : previewFile?.type.startsWith('image/') ? (
+              <img
+                src={previewFile?.url}
+                alt={previewFile?.name}
+                style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+              />
+            ) : previewFile?.type === 'application/pdf' ? (
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(previewFile?.url!)}&embedded=true`}
+                style={{ width: '100%', height: '70vh', border: 'none' }}
+                title="PDF Preview"
+              />
+            ) : previewFile?.type.startsWith('video/') ? (
+              <video controls style={{ maxWidth: '100%', maxHeight: '70vh' }}>
+                <source src={previewFile?.url} type={previewFile?.type} />
+                Your browser does not support video preview.
+              </video>
+            ) : previewFile?.type.startsWith('audio/') ? (
+              <audio controls style={{ width: '100%' }}>
+                <source src={previewFile?.url} type={previewFile?.type} />
+                Your browser does not support audio preview.
+              </audio>
+            ) : (
+              <div>
+                <p>Preview not available for this file type.</p>
+                <button
+                  onClick={() => window.open(previewFile?.url, '_blank')}
+                  style={{
+                    padding: '12px 24px',
+                    background: '#1e40af',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  Open/Download File
+                </button>
               </div>
-            ) : null}
+            )
+
+            }
           </div>
         </DialogContent>
       </Dialog>
