@@ -66,9 +66,10 @@ const ContentHeader = ({ viewMode, onViewModeChange }: ContentHeaderProps) => {
             variant="ghost"
             size="icon"
             className={cn(
-              "w-9 h-9 rounded-none",
+              "w-9 h-9 rounded-none cursor-not-allowed",
               viewMode === "list" && "bg-muted"
             )}
+            disabled
             onClick={() => onViewModeChange("list")}
           >
             <List className="w-4 h-4" />

@@ -22,6 +22,7 @@ import { toast } from "@/hooks/use-toast";
 import UploadModal from "./UploadModal";
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as utils from '@noble/hashes/utils.js';
+import UploadProgress from "./UploadProgress";
 const { bytesToHex } = utils;
 
 const URL = import.meta.env.VITE_API_URL;
@@ -46,8 +47,10 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [fileId, setFileId] = useState<string>('');
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
 
   const [chunks, setChunks] = useState<Array<{ hash: string; index: number; size: number; blob: Blob }>>([]);
+  const chunkProgressRef = useRef<Record<number, number>>({});
 
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -84,21 +87,19 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
       setSelectedFiles(file);
       setUploadModalOpen(true);
 
-      toast({
-        title: "Chunks ready for upload",
-        description: `File "${file.name}" is ready for upload with ID: ${finalFileId.slice(0, 16)}...`,
-      });
+      // toast({
+      //   title: "Chunks ready for upload",
+      //   description: `File "${file.name}" is ready for upload with ID: ${finalFileId.slice(0, 16)}...`,
+      // });
     }
   };
 
   const handleConfirmUpload = async (files: FileList) => {
-    if (onFileUpload) {
-      onFileUpload(files);
-    }
-
     console.log("..works...");
+    setShowUploadProgress(true);
     if (chunks.length === 0 || !selectedFiles) return;
     setUploadProgress(0);
+    chunkProgressRef.current = {};
     try {
       const chunkHashes = chunks.map(c => c.hash);
       console.log("chunkHashes", chunkHashes);
@@ -156,7 +157,6 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
 
         const chunk = chunks[index - 1];
         const partInfo = presignedUrls.find((p: any) => p.partNumber === index);
-        console.log("partInfo", partInfo);
 
         if (!partInfo || !partInfo.url) {
           throw new Error(`Missing presigned URL for part ${index}`);
@@ -168,8 +168,6 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
           const xhr = new XMLHttpRequest();
 
           xhr.open("PUT", partInfo.url);
-          // xhr.setRequestHeader("Content-Type", "application/octet-stream");
-
           xhr.onload = () => {
             if (xhr.status === 200) {
               const eTag = xhr.getResponseHeader("ETag")?.replace(/"/g, "") || "";
@@ -185,10 +183,10 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
             if (e.lengthComputable) {
               const percentPerChunk = 100 / missing.length;
               const thisChunkProgress = (e.loaded / e.total) * percentPerChunk;
-              setUploadProgress(prev => {
-                const otherChunks = prev - (percentPerChunk * (index - 1));
-                return otherChunks + thisChunkProgress;
-              });
+              chunkProgressRef.current[index] = thisChunkProgress;
+              
+              const totalProgress = Object.values(chunkProgressRef.current).reduce((sum, progress) => sum + progress, 0);
+              setUploadProgress(Math.min(totalProgress, 100));
             }
           };
 
@@ -232,6 +230,9 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
       const completeData = await completeRes.json();
 
       setUploadProgress(100);
+      if (onFileUpload) {
+        onFileUpload(files);
+      }
       toast({
         title: "Upload successful",
         description: `File "${selectedFiles.name}" uploaded successfully.`,
@@ -249,8 +250,23 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-    setSelectedFiles(null);
+    setShowUploadProgress(false);
   };
+
+  function handleCloseUploadProgress() {
+    setShowUploadProgress(false);
+    setSelectedFiles(null);
+    setUploadProgress(0);
+  }
+
+  function handleCancelUpload() {
+    setShowUploadProgress(false);
+    setSelectedFiles(null);
+    setUploadProgress(0);
+  }
+
+  console.log("uploadProgress",uploadProgress);
+  
 
 
 
@@ -346,6 +362,16 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
         })() : null}
         onUpload={handleConfirmUpload}
       />
+
+      {showUploadProgress && (
+        <UploadProgress 
+          fileName={selectedFiles.name}
+          progress={uploadProgress}
+          isComplete={uploadProgress === 100}
+          onClose={handleCloseUploadProgress}
+          onCancel={handleCancelUpload}
+        /> 
+      )}
     </>
   );
 };
