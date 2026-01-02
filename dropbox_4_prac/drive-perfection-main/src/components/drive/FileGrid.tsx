@@ -30,6 +30,7 @@ export interface FileItem {
   owner?: string;
   shared?: boolean;
   uploadedAt?: string;
+  thumbnailUrl?: string;
 }
 
 interface FileGridProps {
@@ -64,15 +65,23 @@ const getFileIcon = (type: FileItem["type"]) => {
 
 const FileCard = ({ file, onPreview }: { file: FileItem; onPreview: (file: FileItem) => void }) => {
   return (
-    <div 
+    <div
       className="group relative flex flex-col rounded-lg border border-border bg-card hover:bg-muted/50 cursor-pointer transition-all duration-150 overflow-hidden"
       onClick={() => onPreview(file)}
     >
       {/* Thumbnail Area */}
       <div className="flex items-center justify-center h-[140px] bg-google-gray-50 border-b border-border">
-        <div className="scale-150">
-          {getFileIcon(file.type)}
-        </div>
+        {file.thumbnailUrl && file?.thumbnailUrl.length>0 ? (
+          <img
+            src={file.thumbnailUrl}
+            alt={file.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="scale-150">
+            {getFileIcon(file.type)}
+          </div>
+        )}
       </div>
 
       {/* Info Area */}
@@ -135,7 +144,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
   };
 
   console.log("previewFile", previewFile);
-  
+
   const closePreview = () => {
     setPreviewFile(null);
     setMessage("");
@@ -180,7 +189,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
               {/* <X className="h-4 w-4" /> x  */}
             </Button>
           </DialogHeader>
-          
+
           <div className="mt-4 flex items-center justify-center min-h-[400px]">
             {isPreviewLoading ? (
               <div className="flex items-center gap-2">

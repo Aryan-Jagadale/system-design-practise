@@ -91,7 +91,7 @@ const Sidebar = ({ onFileUpload, onFolderCreate }: SidebarProps) => {
           {storageUsed} GB of {storageTotal} GB used
         </p>
         <Button 
-          variant="outline" 
+          variant="ghost" 
           className="mt-3 w-full h-9 text-sm font-medium text-primary border-primary hover:bg-primary/5 rounded-google-sm"
         >
           Buy storage
