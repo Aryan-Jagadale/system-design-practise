@@ -186,7 +186,7 @@ const NewButtonDropdown = ({ onFileUpload, onFolderCreate }: NewButtonDropdownPr
               chunkProgressRef.current[index] = thisChunkProgress;
               
               const totalProgress = Object.values(chunkProgressRef.current).reduce((sum, progress) => sum + progress, 0);
-              setUploadProgress(Math.min(totalProgress, 100));
+              setUploadProgress(Math.min(totalProgress, 94));
             }
           };
 
