@@ -111,6 +111,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
     type: string;
     url?: string;
     hlsUrl?: string;
+    vttUrl?: string;
   } | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -129,7 +130,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
 
       if (!res.ok) throw new Error("Failed to get preview URL");
 
-      const { downloadUrl,hlsUrl } = await res.json();
+      const { downloadUrl,hlsUrl,item } = await res.json();
       console.log("downloadUrl", downloadUrl);
       
 
@@ -138,7 +139,8 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
         name: file.name,
         type: file.type,
         url: downloadUrl,
-        hlsUrl: hlsUrl
+        hlsUrl: hlsUrl,
+        vttUrl: item?.previewVttUrl || ""
       });
     } catch (err: any) {
       setMessage(`Preview failed: ${err.message}`);
@@ -216,7 +218,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
                     <>
                       <video controls style={{ width: '100%', maxHeight: '70vh' }}>
                         <source src={previewFile.hlsUrl.length>0 ? previewFile.hlsUrl:  previewFile?.url} type="application/x-mpegURL" />
-                        Your browser does not support HLS.
+                        <track kind="metadata" src={previewFile?.vttUrl} default />
                       </video>
                     </>
             ) : previewFile?.type.startsWith('audio/') ? (
