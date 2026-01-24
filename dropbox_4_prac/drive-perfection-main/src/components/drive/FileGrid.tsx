@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import FileList from "./FileList";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -71,7 +71,7 @@ const FileCard = ({ file, onPreview }: { file: FileItem; onPreview: (file: FileI
     >
       {/* Thumbnail Area */}
       <div className="flex items-center justify-center h-[140px] bg-google-gray-50 border-b border-border">
-        {file.thumbnailUrl && file?.thumbnailUrl.length>0 ? (
+        {file.thumbnailUrl && file?.thumbnailUrl.length > 0 ? (
           <img
             src={file.thumbnailUrl}
             alt={file.name}
@@ -112,6 +112,10 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
     url?: string;
     hlsUrl?: string;
     vttUrl?: string;
+    spriteWidth?: number;
+    spriteHeight?: number;
+    spriteUrl?: string;
+    thumbCount?: number;
   } | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -130,9 +134,7 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
 
       if (!res.ok) throw new Error("Failed to get preview URL");
 
-      const { downloadUrl,hlsUrl,item } = await res.json();
-      console.log("downloadUrl", downloadUrl);
-      
+      const { downloadUrl, hlsUrl, item } = await res.json();
 
       setPreviewFile({
         fileId: file.fileId ?? file.id,
@@ -140,7 +142,11 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
         type: file.type,
         url: downloadUrl,
         hlsUrl: hlsUrl,
-        vttUrl: item?.previewVttUrl || ""
+        vttUrl: item?.previewVttUrl || "",
+        spriteWidth: item?.spriteWidth || 160,
+        spriteHeight: item?.spriteHeight || 90,
+        spriteUrl: item?.spriteUrl || "",
+        thumbCount: item?.thumbCount || 0
       });
     } catch (err: any) {
       setMessage(`Preview failed: ${err.message}`);
@@ -156,6 +162,61 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
     setMessage("");
   };
 
+  useEffect(() => {
+    const video = document.querySelector('video') as HTMLVideoElement;
+    const preview = document.getElementById('scrubber-preview') as HTMLElement;
+    const timeDisplay = document.getElementById('scrubber-time') as HTMLElement;
+
+    if (!video || !preview || !previewFile.spriteUrl) return;
+
+    const thumbHeight = previewFile.spriteHeight || 90;
+    const thumbCount = previewFile.thumbCount || 0; 
+
+    const showPreview = (e: MouseEvent) => {
+      const rect = video.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percent = Math.max(0, Math.min(1, x / rect.width));
+      const duration = video.duration || 0;
+      const currentTime = percent * duration;
+
+      const thumbIndex = Math.floor(currentTime / 1);
+      const clampedIndex = Math.min(thumbIndex, thumbCount - 1);
+
+      // Move background to correct thumbnail
+      preview.style.backgroundPosition = `0 ${-clampedIndex * thumbHeight}px`;
+
+      // Position preview under cursor
+      preview.style.left = `${x}px`;
+      preview.style.transform = 'translateX(-50%)';
+      preview.style.opacity = '1';
+
+      // Show time
+      if (timeDisplay) {
+        const mins = Math.floor(currentTime / 60);
+        const secs = Math.floor(currentTime % 60);
+        timeDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        timeDisplay.style.left = `${x}px`;
+        timeDisplay.style.transform = 'translateX(-50%)';
+        timeDisplay.style.opacity = '1';
+      }
+    };
+
+    const hidePreview = () => {
+      preview.style.opacity = '0';
+      if (timeDisplay) timeDisplay.style.opacity = '0';
+    };
+
+    // Hover on controls/progress bar area
+    const controls = video.parentElement;
+    controls?.addEventListener('mousemove', showPreview);
+    controls?.addEventListener('mouseleave', hidePreview);
+
+    return () => {
+      controls?.removeEventListener('mousemove', showPreview);
+      controls?.removeEventListener('mouseleave', hidePreview);
+    };
+  }, [previewFile]);
+
   if (viewMode === "list") {
     return (
       <div className="p-6">
@@ -163,6 +224,9 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
       </div>
     );
   }
+
+  console.log("preview",previewFile?.spriteUrl);
+  
 
   return (
     <div className="p-6 space-y-6">
@@ -215,12 +279,56 @@ const FileGrid = ({ viewMode, files }: FileGridProps) => {
                 title="PDF Preview"
               />
             ) : previewFile?.type.startsWith('video/') ? (
-                    <>
-                      <video controls style={{ width: '100%', maxHeight: '70vh' }}>
-                        <source src={previewFile.hlsUrl.length>0 ? previewFile.hlsUrl:  previewFile?.url} type="application/x-mpegURL" />
-                        <track kind="metadata" src={previewFile?.vttUrl} default />
-                      </video>
-                    </>
+              <>
+
+                {/* <video controls style={{ width: '100%', maxHeight: '70vh' }}>
+                          <source src={previewFile.hlsUrl.length > 0 ? previewFile.hlsUrl : previewFile?.url} type="application/x-mpegURL" />
+                        </video> */}
+
+                <div style={{ position: 'relative', display: 'inline-block', width: '100%' }}>
+
+                  <video
+                    controls
+                    style={{ width: '100%', maxHeight: '70vh', background: 'black' }}
+                    preload="metadata"
+                  >
+                    <source
+                      src={previewFile.hlsUrl && previewFile.hlsUrl.length > 0 ? previewFile.hlsUrl : previewFile?.url}
+                      type="application/x-mpegURL"
+                    />
+                    Your browser does not support video playback.
+                  </video>
+
+                  {previewFile.spriteUrl && previewFile.spriteUrl.length > 0 && (
+                    <div
+                      id="scrubber-preview"
+                      style={{
+                        position: 'absolute',
+                        bottom: '80px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: `${(previewFile.spriteWidth || 160)}px`,
+                        height: `${(previewFile.spriteHeight || 90)}px`,
+                        backgroundImage: `url("${previewFile.spriteUrl}")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '100% auto',
+                        border: '1px solid white',
+                        borderRadius: '8px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.8)',
+                        pointerEvents: 'none',
+                        opacity: 0,
+                        transition: 'opacity 0.2s ease',
+                        zIndex: 100,
+                        backgroundColor: 'black',
+                      }}
+                    />
+                  )}
+
+
+                </div>
+
+
+              </>
             ) : previewFile?.type.startsWith('audio/') ? (
               <audio controls style={{ width: '100%' }}>
                 <source src={previewFile?.url} type={previewFile?.type} />
