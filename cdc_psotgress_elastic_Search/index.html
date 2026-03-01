@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Product Autocomplete</title>
+  <style>body{font-family:sans-serif;} input{width:300px;padding:8px;}</style>
+</head>
+<body>
+  <h2>Search Products</h2>
+  <input type="text" id="search" placeholder="Type product name..." autocomplete="off">
+  <ul id="results"></ul>
+
+  <script>
+    const input = document.getElementById('search');
+    const results = document.getElementById('results');
+
+    input.addEventListener('input', async () => {
+      const q = input.value.trim();
+      if (q.length < 2) {
+        results.innerHTML = '';
+        return;
+      }
+      const res = await fetch(`http://localhost:3000/autocomplete?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      results.innerHTML = data.map(item => `<li>${item.name} ${item.price ? `($${item.price})` : ''}</li>`).join('');
+    });
+  </script>
+</body>
+</html>
