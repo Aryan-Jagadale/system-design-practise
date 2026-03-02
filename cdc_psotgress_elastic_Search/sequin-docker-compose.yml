@@ -1,0 +1,54 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: app
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3   # or latest 8.x
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+  sequin_redis:
+    image: redis:7
+    ports:
+      - "7378:6379"
+    command: ["redis-server", "--port", "6379"]
+    volumes:
+      - sequin_redis_data:/data
+
+  sequin:
+    image: sequin/sequin:latest
+    pull_policy: always
+    depends_on:
+      - postgres
+      - sequin_redis
+    ports:
+      - "7376:7376"
+    environment:
+      # DATABASE_URL: postgres://user:pass@postgres:5432/app
+      - PG_HOSTNAME=postgres
+      - PG_DATABASE=app
+      - PG_PORT=5432
+      - PG_USERNAME=user
+      - PG_PASSWORD=pass
+      - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
+      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
+      - REDIS_URL=redis://sequin_redis:6379
+volumes:
+  pgdata:
+  esdata:
+  sequin_redis_data:

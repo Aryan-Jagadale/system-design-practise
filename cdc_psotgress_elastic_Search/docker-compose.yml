@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   postgres:
     image: postgres:16
@@ -13,7 +13,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3   # or latest 8.x
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3 # or latest 8.x
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
@@ -22,33 +22,63 @@ services:
       - "9300:9300"
     volumes:
       - esdata:/usr/share/elasticsearch/data
-  sequin_redis:
-    image: redis:7
-    ports:
-      - "7378:6379"
-    command: ["redis-server", "--port", "6379"]
-    volumes:
-      - sequin_redis_data:/data
 
-  sequin:
-    image: sequin/sequin:latest
-    pull_policy: always
-    depends_on:
-      - postgres
-      - sequin_redis
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.0
+    hostname: kafka
+    container_name: kafka
     ports:
-      - "7376:7376"
+      - "9092:9092"
+      - "9093:9093"
     environment:
-      # DATABASE_URL: postgres://user:pass@postgres:5432/app
-      - PG_HOSTNAME=postgres
-      - PG_DATABASE=app
-      - PG_PORT=5432
-      - PG_USERNAME=user
-      - PG_PASSWORD=pass
-      - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
-      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
-      - REDIS_URL=redis://sequin_redis:6379
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qg==
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  connect:
+    image: confluentinc/cp-kafka-connect:7.7.0
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:29092
+      CONNECT_REST_PORT: 8083
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_GROUP_ID: connect-cluster
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+    command: >
+      bash -c "
+      confluent-hub install --no-prompt debezium/debezium-connector-postgresql:latest &&
+      confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:latest &&
+      /etc/confluent/docker/run"
+  
+
 volumes:
   pgdata:
   esdata:
-  sequin_redis_data:
+  kafka_data:
