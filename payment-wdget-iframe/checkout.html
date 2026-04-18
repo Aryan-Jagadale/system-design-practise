@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+</head>
+<body class="bg-white">
+
+  <div class="max-w-md mx-auto p-6">
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-2xl font-bold">Checkout</h1>
+      <button onclick="sendClose()" 
+              class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+    </div>
+
+    <div id="order-summary" class="bg-gray-50 p-5 rounded-2xl mb-8">
+      <!-- Filled by JS -->
+    </div>
+
+    <div class="space-y-6">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+        <input type="text" id="card" placeholder="4242 4242 4242 4242" 
+               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Expiry</label>
+          <input type="text" id="expiry" placeholder="MM/YY" 
+                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">CVC</label>
+          <input type="text" id="cvc" placeholder="123" maxlength="4"
+                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+    </div>
+
+    <button onclick="processPayment()" 
+            id="pay-btn"
+            class="mt-10 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-2xl text-lg transition">
+      Pay <span id="pay-amount"></span>
+    </button>
+
+    <p class="text-center text-xs text-gray-400 mt-6">
+      🔒 Secure checkout powered by YourCompany
+    </p>
+  </div>
+
+  <script>
+    // Read config from query params
+    const params = new URLSearchParams(window.location.search);
+    const sessionToken = params.get("sessionToken");
+    const amount = parseInt(params.get("amount")) || 2999;
+    const currency = params.get("currency") || "USD";
+    const productName = params.get("productName") || "Product";
+    const orderId = params.get("orderId") || "demo";
+    const primaryColor = params.get("primaryColor") || "#4f46e5";
+    const WIDGET_ORIGIN = "http://127.0.0.1:5501";
+
+    
+    document.documentElement.style.setProperty("--tw-color-indigo-600", primaryColor);
+
+    document.getElementById("order-summary").innerHTML = `
+      <div class="flex justify-between mb-2">
+        <span class="font-medium">${productName}</span>
+        <span class="font-semibold">$${(amount/100).toFixed(2)} ${currency}</span>
+      </div>
+      <div class="text-xs text-gray-500">Order #${orderId}</div>
+    `;
+
+    document.getElementById("pay-amount").textContent = `$${(amount/100).toFixed(2)}`;
+
+    function sendMessageToParent(type, payload = {}) {
+      if (!sessionToken) {
+        console.log("No session token available");
+        return;
+      }
+
+      window.parent.postMessage({
+        source: "checkout-widget",
+        type: type,
+        sessionToken: sessionToken,
+        payload: payload
+      }, WIDGET_ORIGIN);
+    }
+
+    function sendClose() {
+      sendMessageToParent("CLOSE");
+    }
+
+    function processPayment() {
+      const btn = document.getElementById("pay-btn");
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+
+      // Simulate network + payment (fake success after 1.5s)
+      setTimeout(() => {
+        const success = Math.random() > 0.2; // 80% success rate for demo
+
+        if (success) {
+          sendMessageToParent("SUCCESS", {
+            paymentId: "pi_demo_" + Date.now(),
+            orderId: orderId,
+            amount: amount
+          });
+        } else {
+          sendMessageToParent("ERROR", { message: "Card declined. Please try again." });
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }, 1500);
+    }
+
+    // Optional: Auto-resize iframe based on content height
+    function resize() {
+      const height = document.documentElement.scrollHeight + 20;
+      sendMessageToParent("RESIZE", { height });
+    }
+
+    window.addEventListener("load", resize);
+    window.addEventListener("resize", resize);
+  </script>
+</body>
+</html>
