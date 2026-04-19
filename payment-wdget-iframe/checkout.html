@@ -4,53 +4,241 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Checkout</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@600;700&display=swap');
+
+    :root {
+      --brand: #4f46e5;
+      --brand-dark: #3730a3;
+      --surface: rgba(255, 255, 255, 0.92);
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe2f0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      padding: 28px 16px;
+      color: var(--text);
+      background:
+        radial-gradient(800px 380px at -12% -15%, #fcd34d 0%, transparent 62%),
+        radial-gradient(740px 360px at 115% 115%, #bfdbfe 0%, transparent 65%),
+        linear-gradient(140deg, #f8fafc 0%, #eef2ff 48%, #fff7ed 100%);
+    }
+
+    .max-w-md {
+      width: 100%;
+      max-width: 30rem;
+      margin: 0 auto;
+      animation: rise-in 420ms ease-out;
+    }
+
+    .card {
+      background: var(--surface);
+      border-radius: 1.5rem;
+      padding: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.75);
+      box-shadow:
+        0 10px 30px rgba(15, 23, 42, 0.12),
+        0 2px 8px rgba(15, 23, 42, 0.08);
+      backdrop-filter: blur(8px);
+    }
+
+    h1 {
+      font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    input {
+      width: 100%;
+      padding: 0.9rem 0.95rem;
+      border: 1px solid var(--line);
+      border-radius: 0.85rem;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+      background: #f8fafc;
+      color: #0b1220;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: var(--brand);
+      background: white;
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 20%, transparent);
+    }
+
+    label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: block;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .order-box {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--brand) 88%, #ffffff), var(--brand-dark));
+      color: white;
+      padding: 1.15rem 1.25rem;
+      border-radius: 1.1rem;
+      margin-bottom: 1.2rem;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    }
+
+    .order-box span {
+      opacity: 0.95;
+    }
+
+    .total {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    #pay-btn {
+      width: 100%;
+      padding: 0.95rem;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 88%, #ffffff), var(--brand-dark));
+      color: white;
+      font-family: "Space Grotesk", "Trebuchet MS", sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      border-radius: 1rem;
+      border: none;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+      cursor: pointer;
+      margin-top: 20px;
+      box-shadow: 0 10px 20px color-mix(in srgb, var(--brand) 28%, transparent);
+    }
+
+    #pay-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px color-mix(in srgb, var(--brand) 35%, transparent);
+    }
+
+    #pay-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .close-btn {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #6b7280;
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: transform 0.2s ease, background 0.2s ease;
+      padding: 0;
+    }
+
+    .close-btn:hover {
+      transform: translateY(-1px);
+      background: #ffffff;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .secure {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 0.95rem;
+      margin-bottom: 0;
+      font-weight: 600;
+    }
+
+    @keyframes rise-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+
+      .card {
+        padding: 1.1rem;
+        border-radius: 1.1rem;
+      }
+
+      .row {
+        flex-direction: column;
+        gap: 10px;
+      }
+    }
+  </style>
+
+
 </head>
+
 <body class="bg-white">
 
-  <div class="max-w-md mx-auto p-6">
-    <div class="flex justify-between items-center mb-8">
-      <h1 class="text-2xl font-bold">Checkout</h1>
-      <button onclick="sendClose()" 
-              class="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+  <div class="max-w-md">
+  <div class="card">
+
+    <div class="header-row">
+      <h1>Checkout</h1>
+      <button class="close-btn" onclick="sendClose()" aria-label="Close checkout">×</button>
     </div>
 
-    <div id="order-summary" class="bg-gray-50 p-5 rounded-2xl mb-8">
-      <!-- Filled by JS -->
+    <div id="order-summary" class="order-box"></div>
+
+    <div>
+      <label>Card Number</label>
+      <input type="text" id="card" placeholder="4242 4242 4242 4242">
     </div>
 
-    <div class="space-y-6">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
-        <input type="text" id="card" placeholder="4242 4242 4242 4242" 
-               class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
+    <div class="row" style="margin-top:14px;">
+      <div style="flex:1;">
+        <label>Expiry</label>
+        <input type="text" id="expiry" placeholder="MM/YY">
       </div>
-
-      <div class="grid grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Expiry</label>
-          <input type="text" id="expiry" placeholder="MM/YY" 
-                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">CVC</label>
-          <input type="text" id="cvc" placeholder="123" maxlength="4"
-                 class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500">
-        </div>
+      <div style="flex:1;">
+        <label>CVC</label>
+        <input type="text" id="cvc" placeholder="123">
       </div>
     </div>
 
-    <button onclick="processPayment()" 
-            id="pay-btn"
-            class="mt-10 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-2xl text-lg transition">
+    <button onclick="processPayment()" id="pay-btn">
       Pay <span id="pay-amount"></span>
     </button>
 
-    <p class="text-center text-xs text-gray-400 mt-6">
-      🔒 Secure checkout powered by YourCompany
-    </p>
+    <p class="secure">🔒 Secure checkout powered by YourCompany</p>
+
   </div>
+</div>
 
   <script>
     // Read config from query params
@@ -61,26 +249,30 @@
     const productName = params.get("productName") || "Product";
     const orderId = params.get("orderId") || "demo";
     const primaryColor = params.get("primaryColor") || "#4f46e5";
-    const WIDGET_ORIGIN = "http://127.0.0.1:5501";
+    const WIDGET_ORIGIN = "https://d113uktkms0lt5.cloudfront.net";
 
-    
-    document.documentElement.style.setProperty("--tw-color-indigo-600", primaryColor);
+    document.documentElement.style.setProperty("--brand", primaryColor);
 
     document.getElementById("order-summary").innerHTML = `
       <div class="flex justify-between mb-2">
         <span class="font-medium">${productName}</span>
-        <span class="font-semibold">$${(amount/100).toFixed(2)} ${currency}</span>
+        <span class="font-semibold">$${(amount / 100).toFixed(2)} ${currency}</span>
       </div>
       <div class="text-xs text-gray-500">Order #${orderId}</div>
     `;
 
-    document.getElementById("pay-amount").textContent = `$${(amount/100).toFixed(2)}`;
+    document.getElementById("pay-amount").textContent = `$${(amount / 100).toFixed(2)}`;
 
     function sendMessageToParent(type, payload = {}) {
       if (!sessionToken) {
         console.log("No session token available");
         return;
       }
+      if (!WIDGET_ORIGIN) {
+        console.warn("Parent origin unavailable; message not sent");
+        return;
+      }
+      console.log("Sending message to parent:", type, payload);
 
       window.parent.postMessage({
         source: "checkout-widget",
@@ -99,8 +291,6 @@
       const originalText = btn.textContent;
       btn.disabled = true;
       btn.textContent = "Processing...";
-
-      // Simulate network + payment (fake success after 1.5s)
       setTimeout(() => {
         const success = Math.random() > 0.2; // 80% success rate for demo
 

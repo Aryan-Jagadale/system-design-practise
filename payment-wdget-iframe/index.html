@@ -1,63 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Merchant Store - Demo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-    }
-  </style>
+  <title>Merchant Store - CSP Safe Demo</title>
+  <script src="https://d113uktkms0lt5.cloudfront.net/widget.min.js" async></script>
 </head>
+<body style="font-family: system-ui; padding: 40px; text-align: center;">
 
-<body class="bg-gray-50 py-12">
+  <h1>Awesome Product</h1>
+  <p style="font-size: 32px; color: green; font-weight: bold;">₹2,999</p>
 
-  <div class="max-w-2xl mx-auto text-center">
-    <h1 class="text-4xl font-bold mb-4">Awesome Product</h1>
-    <p class="text-2xl text-green-600 font-semibold mb-8">$29.99</p>
+  <pay-checkout 
+    public-key="pk_test_demo123"
+    amount="2999"
+    currency="INR"
+    product-name="Awesome Product"
+    order-id="ord_12345"
+    primary-color="#4f46e5"
+    on-success="handleSuccess"
+    on-error="handleError">
+  </pay-checkout>
 
-
-    <div id="checkout-container" class="mb-8 hidden"></div>
-
-    <button onclick="CheckoutWidget.open()"
-      class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 px-10 rounded-xl text-lg shadow-lg">
-      Buy Now - Open Checkout
-    </button>
-
-    <p class="mt-8 text-sm text-gray-500">
-      This page simulates a merchant website.<br>
-      The widget is loaded from <code>widget.js</code>
-    </p>
-  </div>
-
-  <script src="widget.min.js" async></script>
 
   <script>
+    function handlePaymentSuccess(data) {
+      alert("Payment Successful!\nPayment ID: " + data.paymentId);
+      console.log("Success:", data);
+    }
 
-    window.addEventListener('load', () => {
-      CheckoutWidget.init({
-        publicKey: "pk_test_demo123",
-        amount: 2999,
-        currency: "USD",
-        productName: "Awesome Product",
-        orderId: "ord_demo_" + Date.now(),
-        mode: "modal",
-        theme: { primaryColor: "#4f46e5" },
-
-        onSuccess: (data) => {
-          alert("Payment Successful! Payment ID: " + data.paymentId);
-          console.log("Success data:", data);
-        },
-        onError: (err) => {
-          alert("Payment Failed: " + err.message);
-        },
-        onClose: () => console.log("Widget closed by user")
-      });
-    });
+    function handlePaymentError(err) {
+      alert("Payment Failed: " + err.message);
+    }
   </script>
 </body>
-
 </html>
