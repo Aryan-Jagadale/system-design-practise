@@ -1,0 +1,136 @@
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+
+	"fb-live-comments-poc/internal/model"
+	"fb-live-comments-poc/internal/repository"
+
+	"github.com/gin-gonic/gin"
+)
+
+func CreateComment(repo *repository.CassandraRepository, rRepo *repository.RedisRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		videoID := c.Param("videoId")
+		if videoID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "videoId is required in URL"})
+			return
+		}
+
+		var req model.CreateCommentRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		req.VideoID = videoID
+
+		comment, err := repo.CreateComment(req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		commentJSON, err := json.Marshal(comment)
+		if err != nil {
+			fmt.Printf("Warning: Failed to marshal comment to JSON: %v\n", err)
+		} else {
+			if err := rRepo.PublishComment(videoID, commentJSON); err != nil {
+				fmt.Printf("Warning: Failed to publish to Redis: %v\n", err)
+			} else {
+				fmt.Printf("Published comment to Redis for video: %s\n", videoID)
+			}
+		}
+
+		c.JSON(http.StatusCreated, comment)
+	}
+}
+
+func GetComments(repo *repository.CassandraRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		videoID := c.Param("videoId")
+		if videoID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "videoId is required"})
+			return
+		}
+
+		limit := 20
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+				limit = parsed
+			}
+		}
+		cursor := c.Query("cursor")
+
+		comments, err := repo.GetCommentsPaginated(videoID, limit,cursor)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, comments)
+	}
+}
+
+func StreamComments(cRepo *repository.CassandraRepository, rRepo *repository.RedisRepository) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		videoID := c.Param("videoId")
+		if videoID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "videoId is required"})
+			return
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+
+		rRepo.IncrementViewerCount(videoID)
+
+		recentComments, err := cRepo.GetRecentComments(videoID, 30)
+		if err == nil && len(recentComments) > 0 {
+			for _, comment := range recentComments {
+				
+				c.SSEvent("history", comment)
+				c.Writer.Flush()
+			}
+		}
+
+		c.SSEvent("connected", gin.H{
+			"message":  "Connected to live comments stream",
+			"video_id": videoID,
+		})
+
+		c.Writer.Flush()
+
+		
+
+		ctx := c.Request.Context()
+		pubsub := rRepo.SubscribeToVideo(ctx, videoID)
+		defer pubsub.Close()
+
+		ch := pubsub.Channel()
+
+		defer func() {
+			rRepo.DecrementViewerCount(videoID)
+			fmt.Printf("Client disconnected from video %s\n", videoID)
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+
+				fmt.Printf("Client disconnected from video %s\n", videoID)
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				c.SSEvent("comment", msg.Payload)
+				c.Writer.Flush()
+			}
+		}
+	}
+}
