@@ -10,6 +10,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	ViewerThresholdForHot = 50000 // 50k viewers = "Hot"
+)
+
 type RedisRepository struct {
 	Client *redis.Client
 	Manager *subscription.SubscriptionManager
@@ -78,4 +82,32 @@ func (r *RedisRepository) GetViewerCount(videoID string) (int64, error) {
 		return 0, nil
 	}
 	return count, err
+}
+
+func (r *RedisRepository) IsVideoHot(videoID string) (bool, error) {
+	count, err := r.GetViewerCount(videoID)
+	if err != nil {
+		return false, err
+	}
+	return count >= ViewerThresholdForHot, nil
+}
+
+func (r *RedisRepository) AddToRecentComments(videoID string, commentJSON []byte) error {
+	ctx := context.Background()
+	key := "recent_comments:" + videoID
+	
+	r.Client.LPush(ctx, key, commentJSON)
+	r.Client.LTrim(ctx, key, 0, 199)
+	return nil
+}
+
+func (r *RedisRepository) GetRecentCommentsCache(videoID string, limit int) ([]string, error) {
+	ctx := context.Background()
+	key := "recent_comments:" + videoID
+	
+	result, err := r.Client.LRange(ctx, key, 0, int64(limit-1)).Result()
+	if err == redis.Nil {
+		return []string{}, nil
+	}
+	return result, err
 }

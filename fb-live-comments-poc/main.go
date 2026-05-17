@@ -7,6 +7,8 @@ import (
 
 	"github.com/sseadmin/fb-live-comments-poc/internal/handler"
 	"github.com/sseadmin/fb-live-comments-poc/internal/repository"
+	"github.com/sseadmin/fb-live-comments-poc/internal/service"
+
 
 	"github.com/gin-gonic/gin"
 )
@@ -29,6 +31,8 @@ func main() {
 	}
 	defer rRepo.Close()
 
+	modeService := service.NewVideoModeService(rRepo)
+
 
 	r := gin.Default()
 
@@ -36,7 +40,8 @@ func main() {
 	r.POST("/comments/:videoId", handler.CreateComment(cRepo,rRepo))
 	r.GET("/comments/:videoId", handler.GetComments(cRepo))
 
-	r.GET("/stream/:videoId", handler.StreamComments(cRepo, rRepo))
+	r.GET("/stream/:videoId", handler.StreamComments(cRepo, rRepo,modeService))
+	r.GET("/poll/:videoId", handler.PollComments(cRepo, rRepo))
 
 	fmt.Println("Server starting on :8080")
 	fmt.Println("📡 SSE Stream available at /stream/{videoId}")
