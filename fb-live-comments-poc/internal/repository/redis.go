@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sseadmin/fb-live-comments-poc/internal/subscription"
+
 	"github.com/redis/go-redis/v9"
 )
 
 type RedisRepository struct {
 	Client *redis.Client
+	Manager *subscription.SubscriptionManager
 }
 
 func NewRedisRepository(host string) (*RedisRepository, error) {
@@ -29,9 +32,11 @@ func NewRedisRepository(host string) (*RedisRepository, error) {
 	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
+	repo := &RedisRepository{Client: client}
+	repo.Manager = subscription.NewSubscriptionManager(client,repo)
 
-	fmt.Println("Connected to Redis successfully")
-	return &RedisRepository{Client: client}, nil
+	fmt.Println("Connected to Redis && Subscription successfully")
+	return repo, nil
 }
 
 // Close closes the Redis connection
@@ -68,5 +73,9 @@ func (r *RedisRepository) DecrementViewerCount(videoID string) error {
 func (r *RedisRepository) GetViewerCount(videoID string) (int64, error) {
 	ctx := context.Background()
 	key := "viewers:" + videoID
-	return r.Client.Get(ctx, key).Int64()
+	count, err := r.Client.Get(ctx, key).Int64()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	return count, err
 }

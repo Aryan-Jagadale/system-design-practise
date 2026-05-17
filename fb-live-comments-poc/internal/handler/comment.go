@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"fb-live-comments-poc/internal/model"
-	"fb-live-comments-poc/internal/repository"
+	"github.com/sseadmin/fb-live-comments-poc/internal/model"
+	"github.com/sseadmin/fb-live-comments-poc/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -92,7 +92,6 @@ func StreamComments(cRepo *repository.CassandraRepository, rRepo *repository.Red
 		recentComments, err := cRepo.GetRecentComments(videoID, 30)
 		if err == nil && len(recentComments) > 0 {
 			for _, comment := range recentComments {
-				
 				c.SSEvent("history", comment)
 				c.Writer.Flush()
 			}
@@ -105,24 +104,27 @@ func StreamComments(cRepo *repository.CassandraRepository, rRepo *repository.Red
 
 		c.Writer.Flush()
 
-		
-
-		ctx := c.Request.Context()
-		pubsub := rRepo.SubscribeToVideo(ctx, videoID)
-		defer pubsub.Close()
+		pubsub, err := rRepo.Manager.SubscribeIfNeeded(videoID)
+		if err != nil {
+			fmt.Printf("Failed to subscribe: %v\n", err)
+			return
+		}
 
 		ch := pubsub.Channel()
 
 		defer func() {
 			rRepo.DecrementViewerCount(videoID)
-			fmt.Printf("Client disconnected from video %s\n", videoID)
+			if err := rRepo.Manager.CheckAndCleanupIfIdle(videoID); err != nil {
+				fmt.Printf("Cleanup check failed for %s: %v\n", videoID, err)
+			}
+			fmt.Printf("Client left video %s\n", videoID)
 		}()
+
+		ctx := c.Request.Context()
 
 		for {
 			select {
 			case <-ctx.Done():
-
-				fmt.Printf("Client disconnected from video %s\n", videoID)
 				return
 			case msg, ok := <-ch:
 				if !ok {

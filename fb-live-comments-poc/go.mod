@@ -1,4 +1,4 @@
-module fb-live-comments-poc
+module github.com/sseadmin/fb-live-comments-poc
 
 go 1.26.3
 

@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 
-	"fb-live-comments-poc/internal/handler"
-	"fb-live-comments-poc/internal/repository"
+	"github.com/sseadmin/fb-live-comments-poc/internal/handler"
+	"github.com/sseadmin/fb-live-comments-poc/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )

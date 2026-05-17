@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"fb-live-comments-poc/internal/model"
+	"github.com/sseadmin/fb-live-comments-poc/internal/model"
 
 	"github.com/gocql/gocql"
 )
@@ -184,7 +184,6 @@ func (r *CassandraRepository) GetCommentsPaginated(videoID string, limit int, cu
 			CreatedAt: createdAt,
 		})
 
-		
 		if count == limit {
 			nextCursor = commentID.String()
 		}
