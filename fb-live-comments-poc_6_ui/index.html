@@ -6,13 +6,13 @@
   <title>Live Comments - Scalability Test</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
-    .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
     .controls { margin: 15px 0; padding: 10px; background: #f0f0f0; border-radius: 8px; }
     button { padding: 8px 15px; margin: 5px; cursor: pointer; }
     .status { padding: 12px; border-radius: 6px; font-weight: bold; }
     .normal { background: #d4edda; color: #155724; }
     .hot { background: #f8d7da; color: #721c24; }
-    #comments { border: 1px solid #ddd; padding: 15px; height: 600px; overflow-y: scroll; background: #fafafa; }
+    #comments { border: 1px solid #ddd; padding: 15px; height: 400px; overflow-y: scroll; background: #fafafa; }
     .comment { margin: 10px 0; padding: 10px; border-radius: 6px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .my-comment { border-left: 4px solid #007bff; }
   </style>
@@ -23,7 +23,7 @@
 
     <div class="controls">
       <label>Video ID: </label>
-      <input type="text" id="videoId" value="video123" />
+      <input type="text" id="videoId" value="video123" style="height: 30px;" />
       
       <button onclick="connect()">Connect Real User</button>
       <button onclick="disconnect()">Disconnect</button>
@@ -34,7 +34,7 @@
     <div id="status" class="status">Not Connected</div>
 
     <div>
-      <input type="text" id="commentInput" placeholder="Write a comment..." style="width: 75%;" />
+      <input type="text" id="commentInput" placeholder="Write a comment..." style="width: 75%; height: 35px; padding-left: 10px;" />
       <button onclick="postComment()">Post (Optimistic)</button>
     </div>
 
@@ -111,7 +111,7 @@
       } catch(e) {}
     }
 
-    // Optimistic Update + Real Post
+   
     function postComment() {
       const input = document.getElementById("commentInput");
       const content = input.value.trim();
@@ -124,10 +124,10 @@
         created_at: new Date().toISOString()
       };
 
-      // Optimistic UI Update
+      
       addComment(optimisticComment);
 
-      // Send to backend
+   
       fetch(`${API_BASE_URL}/comments/${currentVideoId}`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
