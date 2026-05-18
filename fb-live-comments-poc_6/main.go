@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -46,6 +47,24 @@ func main() {
 
 	r.GET("/stream/:videoId", handler.StreamComments(cRepo, rRepo, modeService))
 	r.GET("/poll/:videoId", handler.PollComments(cRepo, rRepo))
+
+	r.POST("/make-viral/:videoId", func(c *gin.Context) {
+		videoID := c.Param("videoId")
+		if err := rRepo.Client.Set(context.Background(), "viewers:"+videoID, 65000, 0).Err(); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"status": "viral", "viewers": 65000})
+	})
+
+	r.POST("/reset-normal/:videoId", func(c *gin.Context) {
+		videoID := c.Param("videoId")
+		if err := rRepo.Client.Set(context.Background(), "viewers:"+videoID, 245, 0).Err(); err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"status": "normal", "viewers": 245})
+	})
 
 	fmt.Println("Server starting on :8080")
 	fmt.Println("📡 SSE Stream available at /stream/{videoId}")

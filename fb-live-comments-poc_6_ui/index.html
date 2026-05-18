@@ -31,6 +31,9 @@
       <button onclick="disconnect()">Disconnect</button>
       <button onclick="startSimulation()" style="background:#28a745;color:white;">Start Simulation (10k users)</button>
       <button onclick="stopSimulation()" style="background:#dc3545;color:white;">Stop Simulation</button>
+
+      <button onclick="makeVideoViral()" class="btn-viral">🚀 Make Video Viral</button>
+      <button onclick="resetToNormal()" class="btn-reset">Reset to Normal</button>
     </div>
 
     <div id="status" class="status">Not Connected</div>
@@ -105,6 +108,25 @@
 
     function isNearBottom() {
       return commentsEl.scrollHeight - commentsEl.scrollTop - commentsEl.clientHeight < 80;
+    }
+
+    function makeVideoViral() {
+      const videoId = document.getElementById("videoId").value.trim() || "video123";
+      fetch(`${API_BASE_URL}/make-viral/${videoId}`, { method: "POST" })
+        .then(() => {
+          alert(`🚀 Video ${videoId} is now VIRAL! (60,000+ viewers)`);
+          document.getElementById("viewerCount").textContent = "65000+";
+        })
+        .catch(err => console.error(err));
+    }
+
+    function resetToNormal() {
+      const videoId = document.getElementById("videoId").value.trim() || "video123";
+      fetch(`${API_BASE_URL}/reset-normal/${videoId}`, { method: "POST" })
+        .then(() => {
+          alert("Video returned to Normal Mode");
+          document.getElementById("viewerCount").textContent = "245";
+        });
     }
 
     function createCommentElement(comment) {
