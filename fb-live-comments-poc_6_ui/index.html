@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Comments - Scalability Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f4; }
+    .container { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .controls { margin: 15px 0; padding: 10px; background: #f0f0f0; border-radius: 8px; }
+    button { padding: 8px 15px; margin: 5px; cursor: pointer; }
+    .status { padding: 12px; border-radius: 6px; font-weight: bold; }
+    .normal { background: #d4edda; color: #155724; }
+    .hot { background: #f8d7da; color: #721c24; }
+    #comments { border: 1px solid #ddd; padding: 15px; height: 600px; overflow-y: scroll; background: #fafafa; }
+    .comment { margin: 10px 0; padding: 10px; border-radius: 6px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .my-comment { border-left: 4px solid #007bff; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Live Comments</h1>
+
+    <div class="controls">
+      <label>Video ID: </label>
+      <input type="text" id="videoId" value="video123" />
+      
+      <button onclick="connect()">Connect Real User</button>
+      <button onclick="disconnect()">Disconnect</button>
+      <button onclick="startSimulation()" style="background:#28a745;color:white;">Start Simulation (10k users)</button>
+      <button onclick="stopSimulation()" style="background:#dc3545;color:white;">Stop Simulation</button>
+    </div>
+
+    <div id="status" class="status">Not Connected</div>
+
+    <div>
+      <input type="text" id="commentInput" placeholder="Write a comment..." style="width: 75%;" />
+      <button onclick="postComment()">Post (Optimistic)</button>
+    </div>
+
+    <h3>Live Comments Feed (<span id="commentCount">0</span>)</h3>
+    <div id="comments"></div>
+  </div>
+
+  <script>
+    let eventSource = null;
+    let pollInterval = null;
+    let simulationInterval = null;
+    let commentCount = 0;
+    let currentVideoId = "video123";
+    const API_BASE_URL = "http://localhost:8080";
+
+    const fakeUsers = ["Alice", "Bob", "Charlie", "Diana", "Emma", "Frank", "Grace", "Henry", "Ivy", "Jack"];
+
+    function connect() {
+      disconnect();
+      currentVideoId = document.getElementById("videoId").value.trim() || "video123";
+
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = `Connecting to ${currentVideoId}...`;
+
+      eventSource = new EventSource(`${API_BASE_URL}/stream/${currentVideoId}`);
+
+      eventSource.onopen = () => {
+        statusEl.textContent = `Real User Connected (Normal Mode)`;
+        statusEl.className = "status normal";
+      };
+
+      eventSource.addEventListener("history", e => addComment(e.data));
+      eventSource.addEventListener("comment", e => addComment(e.data));
+
+      eventSource.onerror = () => {
+        statusEl.textContent = `Switched to Hot Mode (Polling)`;
+        statusEl.className = "status hot";
+        startPolling();
+      };
+    }
+
+    function startPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(() => {
+        fetch(`${API_BASE_URL}/poll/${currentVideoId}?limit=30`)
+          .then(r => r.json())
+          .then(data => {
+            // In hot mode we replace recent comments
+            if (data.mode === "hot") {
+              document.getElementById("comments").innerHTML = "";
+              data.comments.forEach(str => {
+                try { addComment(str); } catch(e){}
+              });
+            }
+          });
+      }, 1500);
+    }
+
+    function addComment(data) {
+      try {
+        const comment = typeof data === "string" ? JSON.parse(data) : data;
+        const div = document.createElement("div");
+        div.className = "comment";
+        if (comment.user_id === "You") div.classList.add("my-comment");
+        
+        div.innerHTML = `
+          <strong>${comment.user_id}</strong> 
+          <small>${new Date(comment.created_at).toLocaleTimeString()}</small><br>
+          ${comment.content}
+        `;
+        document.getElementById("comments").appendChild(div);
+        document.getElementById("comments").scrollTop = 999999;
+        document.getElementById("commentCount").textContent = ++commentCount;
+      } catch(e) {}
+    }
+
+    // Optimistic Update + Real Post
+    function postComment() {
+      const input = document.getElementById("commentInput");
+      const content = input.value.trim();
+      if (!content) return;
+
+      const optimisticComment = {
+        id: "temp-" + Date.now(),
+        user_id: "You",
+        content: content,
+        created_at: new Date().toISOString()
+      };
+
+      // Optimistic UI Update
+      addComment(optimisticComment);
+
+      // Send to backend
+      fetch(`${API_BASE_URL}/comments/${currentVideoId}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ user_id: "You", content: content })
+      }).catch(err => console.error(err));
+
+      input.value = "";
+    }
+
+    // === Simulation: 10k+ Users ===
+    function startSimulation() {
+      if (simulationInterval) return;
+      
+      let simCount = 0;
+      simulationInterval = setInterval(() => {
+        simCount++;
+        const randomUser = fakeUsers[Math.floor(Math.random() * fakeUsers.length)];
+        const messages = [
+          "This stream is insane! 🔥",
+          "Who else is here?",
+          "Loving this content!",
+          "First time watching live",
+          "Anyone from India?",
+          "This is crazy good",
+          "💯💯💯"
+        ];
+
+        const fakeComment = {
+          user_id: randomUser,
+          content: messages[Math.floor(Math.random() * messages.length)],
+          created_at: new Date().toISOString()
+        };
+
+        addComment(fakeComment);
+
+        
+        if (simCount % 50 === 0) {
+          console.log(`Simulated ${simCount} fake comments...`);
+        }
+      }, 80);
+    }
+
+    function stopSimulation() {
+      if (simulationInterval) {
+        clearInterval(simulationInterval);
+        simulationInterval = null;
+      }
+    }
+
+    function disconnect() {
+      if (eventSource) eventSource.close();
+      if (pollInterval) clearInterval(pollInterval);
+      document.getElementById("status").textContent = "Disconnected";
+    }
+  </script>
+</body>
+</html>
