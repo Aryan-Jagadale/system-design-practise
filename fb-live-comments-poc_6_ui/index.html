@@ -12,7 +12,9 @@
     .status { padding: 12px; border-radius: 6px; font-weight: bold; }
     .normal { background: #d4edda; color: #155724; }
     .hot { background: #f8d7da; color: #721c24; }
-    #comments { border: 1px solid #ddd; padding: 15px; height: 400px; overflow-y: scroll; background: #fafafa; }
+    #comments { border: 1px solid #ddd; padding: 0; height: 400px; overflow-y: auto; background: #fafafa; position: relative; will-change: scroll-position; }
+    #commentsSpacer { width: 1px; }
+    #commentsViewport { position: absolute; top: 0; left: 0; right: 0; will-change: transform; }
     .comment { margin: 10px 0; padding: 10px; border-radius: 6px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .my-comment { border-left: 4px solid #007bff; }
   </style>
@@ -49,8 +51,19 @@
     let commentCount = 0;
     let currentVideoId = "video123";
     const API_BASE_URL = "http://localhost:8080";
+    const VIRTUAL_ROW_HEIGHT = 74;
+    const VIRTUAL_BUFFER = 6;
+    const MAX_STORED_COMMENTS = 20000;
+
+    const commentsEl = document.getElementById("comments");
+    commentsEl.innerHTML = '<div id="commentsSpacer"></div><div id="commentsViewport"></div>';
+    const commentsSpacerEl = document.getElementById("commentsSpacer");
+    const commentsViewportEl = document.getElementById("commentsViewport");
+    let commentsStore = [];
 
     const fakeUsers = ["Alice", "Bob", "Charlie", "Diana", "Emma", "Frank", "Grace", "Henry", "Ivy", "Jack"];
+
+    commentsEl.addEventListener("scroll", () => renderVirtualizedComments(false));
 
     function connect() {
       disconnect();
@@ -84,35 +97,94 @@
           .then(data => {
             // In hot mode we replace recent comments
             if (data.mode === "hot") {
-              document.getElementById("comments").innerHTML = "";
-              data.comments.forEach(str => {
-                try { addComment(str); } catch(e){}
-              });
+              replaceComments(data.comments);
             }
           });
       }, 1500);
     }
 
+    function isNearBottom() {
+      return commentsEl.scrollHeight - commentsEl.scrollTop - commentsEl.clientHeight < 80;
+    }
+
+    function createCommentElement(comment) {
+      const div = document.createElement("div");
+      div.className = "comment";
+      if (comment.user_id === "You") div.classList.add("my-comment");
+
+      const strong = document.createElement("strong");
+      strong.textContent = comment.user_id || "Unknown";
+
+      const small = document.createElement("small");
+      const createdAt = comment.created_at ? new Date(comment.created_at) : new Date();
+      small.textContent = ` ${createdAt.toLocaleTimeString()}`;
+
+      div.appendChild(strong);
+      div.appendChild(small);
+      div.appendChild(document.createElement("br"));
+      div.appendChild(document.createTextNode(comment.content || ""));
+
+      return div;
+    }
+
+    function renderVirtualizedComments(stickToBottom) {
+      const total = commentsStore.length;
+      commentsSpacerEl.style.height = `${total * VIRTUAL_ROW_HEIGHT}px`;
+
+      if (total === 0) {
+        commentsViewportEl.innerHTML = "";
+        document.getElementById("commentCount").textContent = "0";
+        return;
+      }
+
+      const scrollTop = commentsEl.scrollTop;
+      const viewportHeight = commentsEl.clientHeight;
+      const start = Math.max(0, Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_BUFFER);
+      const visibleCount = Math.ceil(viewportHeight / VIRTUAL_ROW_HEIGHT) + VIRTUAL_BUFFER * 2;
+      const end = Math.min(total, start + visibleCount);
+
+      commentsViewportEl.style.transform = `translateY(${start * VIRTUAL_ROW_HEIGHT}px)`;
+      commentsViewportEl.innerHTML = "";
+
+      const fragment = document.createDocumentFragment();
+      for (let i = start; i < end; i++) {
+        fragment.appendChild(createCommentElement(commentsStore[i]));
+      }
+      commentsViewportEl.appendChild(fragment);
+
+      commentCount = total;
+      document.getElementById("commentCount").textContent = String(commentCount);
+
+      if (stickToBottom) {
+        commentsEl.scrollTop = commentsEl.scrollHeight;
+      }
+    }
+
+    function replaceComments(rawComments) {
+      const wasNearBottom = isNearBottom();
+      const nextComments = [];
+
+      rawComments.forEach(str => {
+        try {
+          nextComments.push(typeof str === "string" ? JSON.parse(str) : str);
+        } catch(e) {}
+      });
+
+      commentsStore = nextComments;
+      renderVirtualizedComments(wasNearBottom);
+    }
+
     function addComment(data) {
       try {
         const comment = typeof data === "string" ? JSON.parse(data) : data;
-        const commentsEl = document.getElementById("comments");
-        const wasNearBottom = commentsEl.scrollHeight - commentsEl.scrollTop - commentsEl.clientHeight < 60;
+        const wasNearBottom = isNearBottom();
+        commentsStore.push(comment);
 
-        const div = document.createElement("div");
-        div.className = "comment";
-        if (comment.user_id === "You") div.classList.add("my-comment");
-        
-        div.innerHTML = `
-          <strong>${comment.user_id}</strong> 
-          <small>${new Date(comment.created_at).toLocaleTimeString()}</small><br>
-          ${comment.content}
-        `;
-        commentsEl.appendChild(div);
-        if (wasNearBottom) {
-          commentsEl.scrollTop = commentsEl.scrollHeight;
+        if (commentsStore.length > MAX_STORED_COMMENTS) {
+          commentsStore = commentsStore.slice(commentsStore.length - MAX_STORED_COMMENTS);
         }
-        document.getElementById("commentCount").textContent = ++commentCount;
+
+        renderVirtualizedComments(wasNearBottom);
       } catch(e) {}
     }
 
@@ -187,6 +259,8 @@
       if (pollInterval) clearInterval(pollInterval);
       document.getElementById("status").textContent = "Disconnected";
     }
+
+    renderVirtualizedComments(false);
   </script>
 </body>
 </html>
