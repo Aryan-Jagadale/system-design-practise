@@ -96,6 +96,9 @@
     function addComment(data) {
       try {
         const comment = typeof data === "string" ? JSON.parse(data) : data;
+        const commentsEl = document.getElementById("comments");
+        const wasNearBottom = commentsEl.scrollHeight - commentsEl.scrollTop - commentsEl.clientHeight < 60;
+
         const div = document.createElement("div");
         div.className = "comment";
         if (comment.user_id === "You") div.classList.add("my-comment");
@@ -105,8 +108,10 @@
           <small>${new Date(comment.created_at).toLocaleTimeString()}</small><br>
           ${comment.content}
         `;
-        document.getElementById("comments").appendChild(div);
-        document.getElementById("comments").scrollTop = 999999;
+        commentsEl.appendChild(div);
+        if (wasNearBottom) {
+          commentsEl.scrollTop = commentsEl.scrollHeight;
+        }
         document.getElementById("commentCount").textContent = ++commentCount;
       } catch(e) {}
     }
