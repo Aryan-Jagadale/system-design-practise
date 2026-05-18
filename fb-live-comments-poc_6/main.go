@@ -22,7 +22,7 @@ func main() {
 	cassandraHost := getEnv("CASSANDRA_HOST", "localhost")
 	redisHost := getEnv("REDIS_HOST", "localhost")
 
-	// Cassandra db connection
+	// Cassandra db
 	cRepo, err := repository.NewCassandraRepository(cassandraHost)
 	if err != nil {
 		log.Fatalf("Failed to connect to Cassandra: %v", err)
