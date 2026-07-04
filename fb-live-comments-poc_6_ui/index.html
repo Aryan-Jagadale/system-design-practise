@@ -40,7 +40,7 @@
 
     <div>
       <input type="text" id="commentInput" placeholder="Write a comment..." style="width: 75%; height: 35px; padding-left: 10px;" />
-      <button onclick="postComment()">Post (Optimistic)</button>
+      <button onclick="postComment()">Post</button>
     </div>
 
     <h3>Live Comments Feed (<span id="commentCount">0</span>)</h3>
@@ -224,7 +224,7 @@
       };
 
       
-      addComment(optimisticComment);
+      ///addComment(optimisticComment);
 
    
       fetch(`${API_BASE_URL}/comments/${currentVideoId}`, {
