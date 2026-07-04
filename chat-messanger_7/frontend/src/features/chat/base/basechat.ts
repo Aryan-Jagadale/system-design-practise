@@ -1,12 +1,11 @@
 import { conversations } from "../mock/conversations";
 import { messages } from "../mock/messages";
 
-import type {
-  Conversation,
-  Message,
-} from "../types/chat";
+import type { Conversation, Message } from "../types/chat";
 
-type Listener = () => void;
+import type { DatabaseEvent } from "./events";
+
+type Listener = (event: DatabaseEvent) => void;
 
 export interface ChatState {
   conversations: Conversation[];
@@ -21,7 +20,6 @@ class ChatDatabase {
     messages,
   };
 
-
   subscribe = (listener: Listener) => {
     this.listeners.add(listener);
 
@@ -30,30 +28,23 @@ class ChatDatabase {
     };
   };
 
-  private notify() {
-    this.listeners.forEach((listener) => listener());
+  private notify(event: DatabaseEvent) {
+    this.listeners.forEach((listener) => listener(event));
   }
-
 
   getSnapshot = () => {
     return this.state;
   };
 
-
   getConversation(id: string) {
-    return this.state.conversations.find(
-      (c) => c.id === id
-    );
+    return this.state.conversations.find((c) => c.id === id);
   }
 
   getMessages(conversationId: string) {
     return this.state.messages.filter(
-      (message) =>
-        message.conversationId === conversationId
+      (message) => message.conversationId === conversationId,
     );
   }
-
-
 
   addMessage(message: Message) {
     this.state = {
@@ -61,7 +52,30 @@ class ChatDatabase {
       messages: [...this.state.messages, message],
     };
 
-    this.notify();
+    this.notify({
+      type: "MESSAGE_ADDED",
+      messageId: message.id,
+    });
+  }
+
+  updateMessage(id: string, updates: Partial<Message>) {
+    this.state = {
+      ...this.state,
+      messages: this.state.messages.map((message) =>
+        message.id === id ? { ...message, ...updates } : message,
+      ),
+    };
+
+    this.notify({
+      type: "MESSAGE_UPDATED",
+      messageId: id,
+    });
+  }
+
+  getPendingMessages() {
+    return this.state.messages.filter(
+      (message) => message.status === "pending",
+    );
   }
 }
 

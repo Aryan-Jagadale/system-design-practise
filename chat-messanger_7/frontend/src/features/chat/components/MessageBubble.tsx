@@ -10,20 +10,15 @@ export default function MessageBubble({
   isOwnMessage,
 }: MessageBubbleProps) {
   return (
-    <div
-      className={`flex ${
-        isOwnMessage ? "justify-end" : "justify-start"
-      }`}
-    >
+    <div className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}>
       <div
         className={`rounded-lg px-4 py-2 max-w-xs ${
-          isOwnMessage
-            ? "bg-blue-500 text-white"
-            : "bg-gray-200 text-black"
+          isOwnMessage ? "bg-blue-500 text-white" : "bg-gray-200 text-black"
         }`}
       >
         {message.text}
       </div>
+      <div className="text-xs opacity-70 mt-1">{message.status}</div>
     </div>
   );
 }

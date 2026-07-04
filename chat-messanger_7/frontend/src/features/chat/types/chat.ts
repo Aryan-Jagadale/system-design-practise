@@ -17,4 +17,11 @@ export interface Message {
   conversationId: string;
   text: string;
   createdAt: string;
+  status: MessageStatus;
 }
+
+export type MessageStatus =
+    | "pending"
+    | "sending"
+    | "sent"
+    | "failed";

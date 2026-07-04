@@ -8,7 +8,7 @@ interface ChatStore {
   selectConversation: (id: string) => void;
 }
 
-const conversations = chatDatabase.getConversations();
+const conversations = chatDatabase.getSnapshot().conversations;
 
 export const useChatStore = create<ChatStore>((set) => ({
   selectedConversationId: conversations[0]?.id ?? "",

@@ -1,29 +1,21 @@
 import Sidebar from "./components/Sidebar";
 import ChatWindow from "./components/ChatWindow";
+import { useChatController } from "./controller/chatController";
+import { sendMessage } from "./actions/chatActions";
 
 // import { chatDatabase } from "./base/basechat";
-import { useChatStore } from "./store/ChatStore";
-  import { useDatabase } from "./hooks/useDatabase";
-
 
 export default function ChatLayout() {
-  const db = useDatabase();
+  const {
+    conversations,
+    selectedConversation,
+    messages,
+    selectedConversationId,
+  } = useChatController();
 
-  const selectedConversationId = useChatStore(
-    (state) => state.selectedConversationId
-  );
-
-  const conversations = db.conversations;
-
-  const selectedConversation =
-    conversations.find(
-        c => c.id === selectedConversationId
-    )!;
-
-  const messages = db.messages.filter(
-    message =>
-        message.conversationId === selectedConversationId
-);
+  if (!selectedConversation) {
+    return <div>No conversation selected</div>;
+  }
 
   return (
     <div className="flex h-screen">
@@ -32,10 +24,10 @@ export default function ChatLayout() {
         selectedConversationId={selectedConversationId}
       />
 
-
       <ChatWindow
         conversation={selectedConversation}
         messages={messages}
+        onSend={(text) => sendMessage(selectedConversation.id, text)}
       />
     </div>
   );

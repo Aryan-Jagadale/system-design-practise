@@ -8,11 +8,13 @@ import MessageList from "./MessageList";
 interface ChatWindowProps {
   conversation: Conversation;
   messages: Message[];
+  onSend: (text: string) => void;
 }
 
 export default function ChatWindow({
   conversation,
   messages,
+  onSend
 }: ChatWindowProps) {
   return (
     <div className="flex flex-1 flex-col">
@@ -20,7 +22,7 @@ export default function ChatWindow({
 
       <MessageList messages={messages} />
 
-      <MessageInput />
+      <MessageInput onSend={onSend} />
     </div>
   );
 }
