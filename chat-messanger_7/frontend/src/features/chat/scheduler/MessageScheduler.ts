@@ -1,6 +1,9 @@
 import { chatDatabase } from "../base/basechat";
 import { messageAdded$ } from "../base/databaseEvents";
 import { dataSyncer } from "../sync/dataSyncer";
+import { from } from "rxjs";
+import { concatMap, filter, map } from "rxjs/operators";
+import type { Message } from "../types/chat";
 
 // class MessageScheduler {
 //   private processing = false;
@@ -71,26 +74,41 @@ import { dataSyncer } from "../sync/dataSyncer";
 //   // }
 // }
 
-
 class MessageScheduler {
   constructor() {
     this.registerListeners();
   }
 
   private registerListeners() {
-    messageAdded$.subscribe(async (messageId) => {
-      const message = chatDatabase.getMessage(messageId);
+    // messageAdded$.subscribe(async (messageId) => {
+    //   const message = chatDatabase.getMessage(messageId);
 
-      if (!message) return;
+    //   if (!message) return;
 
-      if (message.status !== "pending") return;
+    //   if (message.status !== "pending") return;
 
-      chatDatabase.updateMessage(message.id, {
-        status: "sending",
+    //   chatDatabase.updateMessage(message.id, {
+    //     status: "sending",
+    //   });
+
+    //   await dataSyncer.sendMessage(message);
+    // });
+
+    messageAdded$
+      .pipe(
+        map((messageId) => chatDatabase.getMessage(messageId)),
+        filter((message: any) => message.status === "pending"),
+        concatMap((message) => {
+          console.log("Scheduling:", message.text);
+
+          return from(dataSyncer.sendMessage(message));
+        }),
+      )
+      .subscribe({
+        error(err) {
+          console.error(err);
+        },
       });
-
-      await dataSyncer.sendMessage(message);
-    });
   }
 }
 

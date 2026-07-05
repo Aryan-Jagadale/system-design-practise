@@ -22,7 +22,20 @@ class DataSyncer {
   }
 
   async sendMessage(message: Message) {
-    await fakeServer.sendMessage(message);
+    
+    chatDatabase.updateMessage(message.id, {
+      status: "sending",
+    });
+
+    try {
+      await fakeServer.sendMessage(message);
+    } catch (error) {
+      chatDatabase.updateMessage(message.id, {
+        status: "failed",
+      });
+
+      throw error;
+    }
   }
 }
 

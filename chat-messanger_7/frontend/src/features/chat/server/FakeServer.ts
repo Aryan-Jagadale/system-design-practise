@@ -7,6 +7,10 @@ class FakeServer {
       setTimeout(resolve, 1000);
     });
 
+    if (Math.random() < 0.3) {
+      throw new Error("Network error");
+    }
+
     emitServerEvent({
       type: "MESSAGE_ACK",
       messageId: message.id,
