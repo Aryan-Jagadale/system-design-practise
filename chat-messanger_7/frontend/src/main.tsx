@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import "./features/chat/scheduler/MessageScheduler";
+import "./features/chat/sync/dataSyncer.ts";
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

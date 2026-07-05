@@ -25,6 +25,8 @@ export function useChatController() {
       message.conversationId === selectedConversationId
   );
 
+  console.log("conver",conversations)
+
   return {
     conversations,
     selectedConversation,

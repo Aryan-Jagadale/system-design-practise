@@ -3,9 +3,9 @@ import { messages } from "../mock/messages";
 
 import type { Conversation, Message } from "../types/chat";
 
-import type { DatabaseEvent } from "./events";
+import { emitDatabaseEvent, databaseEvents$ } from "./databaseEvents";
 
-type Listener = (event: DatabaseEvent) => void;
+import type { Subscription } from "rxjs";
 
 export interface ChatState {
   conversations: Conversation[];
@@ -13,24 +13,10 @@ export interface ChatState {
 }
 
 class ChatDatabase {
-  private listeners = new Set<Listener>();
-
   private state: ChatState = {
     conversations,
     messages,
   };
-
-  subscribe = (listener: Listener) => {
-    this.listeners.add(listener);
-
-    return () => {
-      this.listeners.delete(listener);
-    };
-  };
-
-  private notify(event: DatabaseEvent) {
-    this.listeners.forEach((listener) => listener(event));
-  }
 
   getSnapshot = () => {
     return this.state;
@@ -42,17 +28,34 @@ class ChatDatabase {
 
   getMessages(conversationId: string) {
     return this.state.messages.filter(
-      (message) => message.conversationId === conversationId,
+      (m) => m.conversationId === conversationId,
     );
   }
 
+  getMessage(id: string) {
+    return this.state.messages.find((m) => m.id === id);
+  }
+
+  subscribe = (listener: () => void) => {
+    console.log("React subscribed");
+    const subscription: Subscription = databaseEvents$.subscribe(() => {
+      console.log("Database event received");
+      listener();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  };
+
   addMessage(message: Message) {
+    console.log("2. addMessage");
     this.state = {
       ...this.state,
       messages: [...this.state.messages, message],
     };
 
-    this.notify({
+    emitDatabaseEvent({
       type: "MESSAGE_ADDED",
       messageId: message.id,
     });
@@ -62,20 +65,19 @@ class ChatDatabase {
     this.state = {
       ...this.state,
       messages: this.state.messages.map((message) =>
-        message.id === id ? { ...message, ...updates } : message,
+        message.id === id
+          ? {
+              ...message,
+              ...updates,
+            }
+          : message,
       ),
     };
 
-    this.notify({
+    emitDatabaseEvent({
       type: "MESSAGE_UPDATED",
       messageId: id,
     });
-  }
-
-  getPendingMessages() {
-    return this.state.messages.filter(
-      (message) => message.status === "pending",
-    );
   }
 }
 
