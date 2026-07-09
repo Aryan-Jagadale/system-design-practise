@@ -18,10 +18,12 @@ export interface Message {
   text: string;
   createdAt: string;
   status: MessageStatus;
+  retryCount?: number;
 }
 
 export type MessageStatus =
     | "pending"
     | "sending"
+    | "retrying"
     | "sent"
     | "failed";

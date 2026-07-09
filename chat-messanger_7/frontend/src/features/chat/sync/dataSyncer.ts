@@ -3,6 +3,8 @@ import { chatDatabase } from "../base/basechat";
 import { fakeServer } from "../server/FakeServer";
 import type { Message } from "../types/chat";
 import { messageAck$, messageReceived$ } from "../server/serverEvents";
+import { EMPTY, from, throwError, timer } from "rxjs";
+import { catchError, retry, tap } from "rxjs/operators";
 
 class DataSyncer {
   constructor() {
@@ -22,20 +24,42 @@ class DataSyncer {
   }
 
   async sendMessage(message: Message) {
-    
     chatDatabase.updateMessage(message.id, {
       status: "sending",
+      retryCount: 0,
     });
 
-    try {
-      await fakeServer.sendMessage(message);
-    } catch (error) {
-      chatDatabase.updateMessage(message.id, {
-        status: "failed",
-      });
+    return from(fakeServer.sendMessage(message)).pipe(
+      retry({
+        count: 3,
 
-      throw error;
-    }
+        delay: (error, retryCount) => {
+          const delay = Math.pow(2, retryCount) * 1000;
+          const jitter = Math.random() * 500;
+
+          chatDatabase.updateMessage(message.id, {
+            status: "retrying",
+            retryCount,
+          });
+
+          console.log(`Retry ${retryCount} after ${delay}ms`);
+
+          return timer(delay + jitter);
+        },
+      }),
+      tap(() => {
+        console.log("Successfully sent");
+      }),
+      catchError((error) => {
+        console.log("Message permanently failed");
+
+        chatDatabase.updateMessage(message.id, {
+          status: "failed",
+        });
+
+        return EMPTY;
+      }),
+    );
   }
 }
 

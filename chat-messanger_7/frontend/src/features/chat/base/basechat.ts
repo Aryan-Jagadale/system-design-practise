@@ -79,6 +79,10 @@ class ChatDatabase {
       messageId: id,
     });
   }
+
+  getNextPendingMessage() {
+    return this.state.messages.find((message) => message.status === "pending");
+  }
 }
 
 export const chatDatabase = new ChatDatabase();

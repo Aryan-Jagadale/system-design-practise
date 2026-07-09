@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import "./features/chat/scheduler/MessageScheduler";
 import "./features/chat/sync/dataSyncer.ts";
+import "./features/chat/pipeline/MessagePipeline";
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
